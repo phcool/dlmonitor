@@ -1,9 +1,11 @@
 import sys
+import numpy as np
 from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime, Unicode, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy_searchable import make_searchable
 from sqlalchemy_utils.types import TSVectorType
+from pgvector.sqlalchemy import Vector
 
 if 'Base' not in globals():
     Base = declarative_base()
@@ -27,6 +29,9 @@ class ArxivModel(Base):
     introduction = Column(Text(collation=''))
     conclusion = Column(Text(collation=''))
     analyzed = Column(Boolean, server_default='false', default=False)
+    
+    # 向量表示，使用 pgvector 扩展
+    embedding = Column(Vector(384), nullable=True)  # 使用 sentence-transformers 的默认维度 (384)
 
     # For full text search
     search_vector = Column(

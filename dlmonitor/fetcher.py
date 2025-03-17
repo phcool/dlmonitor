@@ -14,14 +14,17 @@ def get_source(src_name):
     else:
         raise NotImplementedError
 
-def fetch_sources(src_name, fetch_all=False):
+def fetch_sources(src_name, fetch_all=False, model=None):
     global Base, engine
     Base.metadata.create_all(engine)
     src = get_source(src_name)
     if fetch_all:
         src.fetch_all()
     else:
-        src.fetch_new()
+        if src_name == 'arxiv' and model is not None:
+            src.fetch_new(model=model)
+        else:
+            src.fetch_new()
 
 def get_posts(src_name, keywords=None, since=None, start=0, num=100):
     src = get_source(src_name)

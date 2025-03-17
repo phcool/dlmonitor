@@ -34,29 +34,33 @@
                     <span class="fa fa-angle-right"></span>&nbsp;&nbsp;
                     <!-- <a href="/search">Full-text Search</a> &nbsp; | &nbsp; -->
                     <a href="/about">About</a> &nbsp;&nbsp;
-                    <span style="color:#ccc;"><span class="fa fa-angle-right"></span>&nbsp;
-                     Speical Monitors: </span>
-                    <a href="javascript:" onclick="dlmonitor.addKeyword('Hot Papers');">Hot Papers</a>
-                    &nbsp; | &nbsp;
-                    <a href="javascript:" onclick="dlmonitor.addKeyword('Fresh Papers');">Fresh Papers</a>
-                    &nbsp; | &nbsp;
-                    <a href="javascript:" onclick="dlmonitor.addKeyword('Hot Tweets');">Hot Tweets</a>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="input-group keyword-group" style="margin: 12px;">
-                  <input type="text" id="new-keyword" class="form-control" placeholder="keywords">
-                  <span class="input-group-btn">
+                  <input type="text" id="new-keyword" class="form-control" placeholder="Enter search keywords">
+                  <div class="input-group-btn">
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="platformDropdown">
+                        <span id="platform-selection">arXiv</span> <span class="caret"></span>
+                      </button>
+                      <ul class="dropdown-menu" aria-labelledby="platformDropdown">
+                        <li><a href="javascript:void(0)" onclick="dlmonitor.setPlatform('arxiv')">arXiv</a></li>
+                        <li><a href="javascript:void(0)" onclick="dlmonitor.setPlatform('twitter')">Twitter</a></li>
+                      </ul>
+                    </div>
                     <button id="new-keyword-btn" class="btn btn-default" type="button">Add Monitor</button>
-					<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-	  						<span id="date-info">Recent two weeks</span> <span class="caret"></span>
-	  				  </button>
-	  				  <ul class="dropdown-menu">
-	  					<li><a href="javascript:dlmonitor.filterDate('1-week');" >Recent one week</a></li>
-	  					<li><a href="javascript:dlmonitor.filterDate('2-week');">Recent two weeks</a></li>
-	  					<li><a href="javascript:dlmonitor.filterDate('1-month');">Recent one month</a></li>
-	  				  </ul>
-                  </span>
+                    <div class="btn-group">
+                      <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="dateDropdown">
+                          <span id="date-info">Recent two weeks</span> <span class="caret"></span>
+                      </button>
+                      <ul class="dropdown-menu" aria-labelledby="dateDropdown">
+                        <li><a href="javascript:dlmonitor.filterDate('1-week');" >Recent one week</a></li>
+                        <li><a href="javascript:dlmonitor.filterDate('2-week');">Recent two weeks</a></li>
+                        <li><a href="javascript:dlmonitor.filterDate('1-month');">Recent one month</a></li>
+                      </ul>
+                    </div>
+                  </div>
                 </div><!-- /input-group -->
             </div>
             <div class="col-md-2 mendeley-wrapper">

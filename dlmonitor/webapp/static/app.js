@@ -2,11 +2,12 @@
 Javascript for Deep Community.
 */
 
-INIT_KEYWORDS = "Hot Tweets,Hot Papers,Fresh Papers,reinforcement learning,language";
+INIT_KEYWORDS = "arxiv:reinforcement learning,twitter:machine learning,arxiv:language,twitter:AI news";
 
 dlmonitor = {
     ajaxCount: 0,
     previewTimeout: null,
+    currentPlatform: 'arxiv' // 默认平台为arxiv
 };
 
 dlmonitor.getKeywords = function() {
@@ -21,6 +22,24 @@ dlmonitor.getKeywords = function() {
     }
     return kwList;
 };
+
+// 设置当前选择的平台
+dlmonitor.setPlatform = function(platform) {
+    dlmonitor.currentPlatform = platform;
+    $("#platform-selection").text(platform.charAt(0).toUpperCase() + platform.slice(1));
+}
+
+// 添加平台特定的关键字 - 不再需要，由setPlatform和addKeyword共同完成
+dlmonitor.addPlatformKeyword = function(platform) {
+    var keyword = $("#new-keyword").val().trim();
+    if (!keyword) {
+        alert("Please enter keywords");
+        return;
+    }
+    
+    dlmonitor.addKeyword(platform + ":" + keyword);
+    $("#new-keyword").val("");
+}
 
 // This requires js-cookie
 dlmonitor.addKeyword = function(w) {
@@ -38,6 +57,12 @@ dlmonitor.addKeyword = function(w) {
         alert("Keyword can not longer than 80 chars.")
         return;
     }
+    // 确保关键字符合平台:查询格式
+    if (!w.includes(":")) {
+        // 使用当前选择的平台
+        w = dlmonitor.currentPlatform + ":" + w;
+    }
+    
     $("#new-keyword").val("")
     var kwList = dlmonitor.getKeywords();
     if (kwList.length > 10) {
@@ -192,10 +217,16 @@ dlmonitor.updateAll = function(nofetch) {
     if (nofetch == true) return;
     var kwList = dlmonitor.getKeywords();
     for (var i = 0; i < kwList.length; ++i) {
-        if (kwList[i].toLowerCase().includes("tweets")) {
-            var src = 'twitter';
+        var src;
+        if (kwList[i].includes(":")) {
+            // 新格式 platform:query
+            src = kwList[i].split(":")[0].trim().toLowerCase();
+        } else if (kwList[i].toLowerCase().includes("tweets")) {
+            // 兼容旧格式
+            src = 'twitter';
         } else {
-            var src = 'arxiv';
+            // 默认
+            src = 'arxiv';
         }
         dlmonitor.fetch(src, kwList[i], i, start=0);
     }
@@ -276,14 +307,18 @@ dlmonitor.retrieve_fulltext = function() {
 
 dlmonitor.init = function() {
     dlmonitor.updateAll(true);
-    $("#new-keyword-btn").on('click tap', dlmonitor.addKeyword);
-    $('#new-keyword').keypress(function(e) {
-     var key = e.which;
-     if(key == 13)  // the enter key code
-      {
-        $('#new-keyword-btn').click();
-        return false;
-      }
+    // 设置默认平台
+    dlmonitor.setPlatform('arxiv');
+    
+    $("#new-keyword").keypress(function(e) {
+        // Enter key pressed
+        if(e.which == 13) {
+            dlmonitor.addKeyword();
+            return false;
+        }
+    });
+    $("#new-keyword-btn").click(function(){
+        dlmonitor.addKeyword();
     });
     $('#new-keyword').on('keyup', function() {
         clearTimeout(dlmonitor.previewTimeout);
@@ -293,7 +328,8 @@ dlmonitor.init = function() {
                 $("#preview-kw").html(text);
                 $("#posts-preview").height(($(window).height() - 160) + "px")
                 dlmonitor.switchPreview(true);
-                dlmonitor.fetch('arxiv', text, 'preview');
+                // 使用当前平台进行预览
+                dlmonitor.fetch(dlmonitor.currentPlatform, dlmonitor.currentPlatform + ":" + text, 'preview');
             } else {
                 dlmonitor.switchPreview(false);
             }
@@ -307,3 +343,8 @@ dlmonitor.init = function() {
             $("#new-keyword").val('');
     });
 };
+
+// Document ready
+$(function(){
+    dlmonitor.init();
+});

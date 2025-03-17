@@ -6,12 +6,20 @@ from dlmonitor.fetcher import get_posts
 from dlmonitor import settings
 from urllib.parse import unquote
 import datetime as DT
+import logging
 
 from mendeley import Mendeley
 from mendeley.session import MendeleySession
 import oauthlib
 
-
+# 预加载模型
+try:
+    from sentence_transformers import SentenceTransformer
+    global_model = SentenceTransformer('all-MiniLM-L6-v2')
+    logging.info("SentenceTransformer model preloaded successfully")
+except Exception as e:
+    logging.warning(f"Could not preload SentenceTransformer model: {str(e)}")
+    global_model = None
 
 app = Flask(__name__, static_url_path='/static')
 app.secret_key = settings.SESSION_KEY
@@ -19,7 +27,7 @@ app.config['SESSION_TYPE'] = 'filesystem'
 
 
 NUMBER_EACH_PAGE = 30
-DEFAULT_KEYWORDS = "Hot Tweets,Hot Papers,Fresh Papers,reinforcement learning,language"
+DEFAULT_KEYWORDS = "arxiv:reinforcement learning,twitter:machine learning,arxiv:language,twitter:AI news"
 DATE_TOKEN_SET = set(['1-week', '2-week', '1-month'])
 
 # Mendeley
@@ -51,10 +59,39 @@ def index():
         keywords = unquote(keywords)
     target_date = get_date_str(request.cookies.get('datetoken'))
     column_list = []
+    
     for kw in keywords.split(","):
-        src = "twitter" if "tweets" in kw.lower() else "arxiv"
+        if ":" in kw:
+            # 新格式：platform:query
+            parts = kw.split(":", 1)
+            src = parts[0].strip().lower()
+            query = parts[1].strip()
+        else:
+            # 兼容旧格式
+            if "tweets" in kw.lower():
+                src = "twitter"
+                query = kw
+            else:
+                src = "arxiv"
+                query = kw
+
+        # 检查源平台是否有效
+        valid_sources = ["arxiv", "twitter"]
+        if src not in valid_sources:
+            continue
+            
         num_page = 80 if src == "twitter" else NUMBER_EACH_PAGE
-        posts = get_posts(src, keywords=kw, since=target_date, start=0, num=num_page)
+        
+        # 对于Arxiv搜索，使用预加载的模型
+        if src == "arxiv" and global_model and query not in ["Hot Papers", "Fresh Papers"]:
+            # 从sources/arxivsrc.py中直接获取ArxivSource实例并调用get_posts
+            from dlmonitor.sources.arxivsrc import ArxivSource
+            arxiv_src = ArxivSource()
+            posts = arxiv_src.get_posts(keywords=query, since=target_date, start=0, num=num_page, model=global_model)
+        else:
+            # 对于其他源或模型未加载的情况，使用常规的get_posts函数
+            posts = get_posts(src, keywords=query, since=target_date, start=0, num=num_page)
+            
         column_list.append((src, kw, posts))
 
     # Mendeley
@@ -96,12 +133,30 @@ def fetch():
 
     num_page = 80 if src == "twitter" else NUMBER_EACH_PAGE
 
+    # 提取实际查询内容
+    if ":" in kw:
+        # 新格式：platform:query
+        parts = kw.split(":", 1)
+        query = parts[1].strip()
+    else:
+        query = kw
+    
+    # 对于Arxiv搜索，使用预加载的模型
+    if src == "arxiv" and global_model and query not in ["Hot Papers", "Fresh Papers"]:
+        # 从sources/arxivsrc.py中直接获取ArxivSource实例并调用get_posts
+        from dlmonitor.sources.arxivsrc import ArxivSource
+        arxiv_src = ArxivSource()
+        posts = arxiv_src.get_posts(keywords=query, since=target_date, start=start, num=num_page, model=global_model)
+    else:
+        # 对于其他源或模型未加载的情况，使用常规的get_posts函数
+        posts = get_posts(src, keywords=query, since=target_date, start=start, num=num_page)
+
     # Mendeley
     ma_authorized = "ma_token" in session and session["ma_token"] is not None
 
     return render_template(
         "post_{}.html".format(src),
-        posts=get_posts(src, keywords=kw, since=target_date, start=start, num=num_page),
+        posts=posts,
         ma_authorized=ma_authorized)
 
 @app.route("/arxiv/<int:arxiv_id>/<paper_str>")
