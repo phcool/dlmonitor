@@ -7,13 +7,7 @@ from sqlalchemy_utils.types import TSVectorType
 
 if 'Base' not in globals():
     Base = declarative_base()
-    make_searchable()
-
-def str_repr(string):
-    if sys.version_info.major == 3:
-        return string
-    else:
-        return string.encode('utf-8')
+    make_searchable(Base.metadata)
 
 class ArxivModel(Base):
 
@@ -40,7 +34,7 @@ class ArxivModel(Base):
 
     def __repr__(self):
         template = '<Arxiv(id="{0}", url="{1}")>'
-        return str_repr(template.format(self.id, self.arxiv_url))
+        return template.format(self.id, self.arxiv_url)
 
 class TwitterModel(Base):
 
@@ -59,7 +53,7 @@ class TwitterModel(Base):
 
     def __repr__(self):
         template = '<Twitter(id="{0}", user_name="{1}")>'
-        return str_repr(template.format(self.id, self.user))
+        return template.format(self.id, self.user)
 
 class WorkingQueueModel(Base):
 

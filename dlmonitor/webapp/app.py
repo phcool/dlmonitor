@@ -4,7 +4,7 @@ from flask import render_template, send_from_directory
 from dlmonitor.db import close_global_session, get_global_session
 from dlmonitor.fetcher import get_posts
 from dlmonitor import settings
-from urllib2 import unquote
+from urllib.parse import unquote
 import datetime as DT
 
 from mendeley import Mendeley

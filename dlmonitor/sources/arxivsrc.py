@@ -1,34 +1,16 @@
 import os, sys
 from ..db import create_engine
-from base import Source
-from arxiv import mod_query_result, prune_query_result
+from .base import Source
 from sqlalchemy_searchable import search
 from sqlalchemy import desc
-import feedparser
 import time
 from time import mktime
 from datetime import datetime
 import logging
+import arxiv
 
 SEARCH_KEY = "cat:cs.CV+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL+OR+cat:cs.NE+OR+cat:stat.ML"
 MAX_QUERY_NUM = 10000
-
-def query_arxiv(start=0, max_results=100):
-    """
-    Get papers from arxiv.
-    """
-    results = (feedparser.parse('http://export.arxiv.org/api/query?search_query=' + SEARCH_KEY +
-        '&sortBy=lastUpdatedDate&sortOrder=descending&start=' + str(start) + '&max_results=' + str(max_results)))
-    if results.get('status') != 200:
-        raise Exception("HTTP Error " + str(results.get('status', 'no status')) + " in query")
-    else:
-        results = results['entries']
-
-    for result in results:
-        mod_query_result(result)
-        prune_query_result(result)
-    return results
-
 
 class ArxivSource(Source):
 
@@ -74,30 +56,136 @@ class ArxivSource(Source):
         return results
 
     def fetch_new(self):
+        """
+        Fetch new papers from arXiv and store them in the database.
+        This implementation directly uses the arxiv library instead of calling query_arxiv.
+        """
         from ..db import session_scope, ArxivModel
+        
+        # Create client with appropriate configuration
+        client = arxiv.Client(
+            page_size=100,  # Each API call will fetch 100 results
+            delay_seconds=3,  # Wait 3 seconds between API calls to be nice to the server
+            num_retries=3    # Retry failed requests up to 3 times
+        )
+        
+        # Format the search query correctly
+        formatted_query = SEARCH_KEY.replace("+OR+", " OR ")
+        
         with session_scope() as session:
-            for i in range(0, MAX_QUERY_NUM, 100):
-                logging.info("get paper starting from {}".format(i))
-                results = query_arxiv(start=i)
-                anything_new = False
-                for result in results:
-                    arxiv_url = result["arxiv_url"]
-                    if session.query(ArxivModel).filter_by(arxiv_url=arxiv_url).count() == 0:
-                        anything_new = True
-                        new_paper = ArxivModel(
-                            arxiv_url=arxiv_url,
-                            version=self._get_version(arxiv_url),
-                            title=result["title"].replace("\n", "").replace("  ", " "),
-                            abstract=result["summary"].replace("\n", "").replace("  ", " "),
-                            pdf_url=result["pdf_url"],
-                            authors=", ".join(result["authors"])[:800],
-                            published_time=datetime.fromtimestamp(mktime(result["updated_parsed"])),
-                            journal_link=result["journal_reference"],
-                            tag=" | ".join([x["term"] for x in result["tags"]]),
-                            popularity=0
-                        )
-                        session.add(new_paper)
-                session.commit()
-                if not anything_new:
-                    break
-                time.sleep(3)
+            # Instead of fetching in batches with multiple API calls,
+            # we'll make a single search with a larger max_results
+            # Use MAX_QUERY_NUM but limit to a reasonable value to avoid memory issues
+            max_results = min(MAX_QUERY_NUM, 2000)  # Limit to 2000 to avoid memory issues
+            
+            search_query = arxiv.Search(
+                query=formatted_query,
+                max_results=max_results,
+                sort_by=arxiv.SortCriterion.LastUpdatedDate
+            )
+            
+            logging.info(f"Fetching up to {max_results} papers from arXiv...")
+            
+            try:
+                # Get results iterator
+                results_iterator = client.results(search_query)
+                
+                # Process results in batches to avoid memory issues
+                batch_size = 100
+                batch = []
+                total_new = 0
+                consecutive_empty_batches = 0  # Track consecutive batches with no new papers
+                
+                # Process first 200 results (2 pages) which are usually reliable
+                for i, result in enumerate(results_iterator):
+                    # Process in batches
+                    batch.append(result)
+                    
+                    if len(batch) >= batch_size or i == max_results - 1:  # Process batch or last item
+                        logging.info(f"Processing batch of {len(batch)} papers...")
+                        
+                        anything_new = False  # Reset for each batch
+                        for paper in batch:
+                            arxiv_url = paper.entry_id
+                            
+                            # Check if paper already exists in database
+                            if session.query(ArxivModel).filter_by(arxiv_url=arxiv_url).count() == 0:
+                                anything_new = True
+                                total_new += 1
+                                
+                                # Create new paper record
+                                new_paper = ArxivModel(
+                                    arxiv_url=arxiv_url,
+                                    version=self._get_version(arxiv_url),
+                                    title=paper.title.replace("\n", "").replace("  ", " "),
+                                    abstract=paper.summary.replace("\n", "").replace("  ", " "),
+                                    pdf_url=paper.pdf_url,
+                                    authors=", ".join([author.name for author in paper.authors])[:800],
+                                    published_time=datetime.fromtimestamp(mktime(paper.updated.timetuple())),
+                                    journal_link=paper.journal_ref if hasattr(paper, "journal_ref") else "",
+                                    tag=" | ".join(paper.categories),
+                                    popularity=0
+                                )
+                                session.add(new_paper)
+                        
+                        # Commit batch and clear
+                        session.commit()
+                        
+                        # Update consecutive empty batches counter
+                        if anything_new:
+                            consecutive_empty_batches = 0  # Reset counter if we found new papers
+                        else:
+                            consecutive_empty_batches += 1
+                        
+                        batch = []
+                        
+                        # If we've processed at least 100 papers and had 3 consecutive batches with no new papers, we can stop
+                        if i >= 100 and consecutive_empty_batches >= 3:
+                            logging.info(f"No new papers found in {consecutive_empty_batches} consecutive batches. Stopping.")
+                            break
+                
+            except arxiv.UnexpectedEmptyPageError as e:
+                # Handle empty page error - this is common with arXiv API
+                logging.warning(f"Received empty page from arXiv API: {str(e)}")
+                logging.info("This is a common issue with the arXiv API. Processing will continue with the data already fetched.")
+                
+                # Process any remaining papers in the batch
+                if batch:
+                    logging.info(f"Processing final batch of {len(batch)} papers...")
+                    
+                    anything_new = False
+                    for paper in batch:
+                        arxiv_url = paper.entry_id
+                        
+                        # Check if paper already exists in database
+                        if session.query(ArxivModel).filter_by(arxiv_url=arxiv_url).count() == 0:
+                            anything_new = True
+                            total_new += 1
+                            
+                            # Create new paper record
+                            new_paper = ArxivModel(
+                                arxiv_url=arxiv_url,
+                                version=self._get_version(arxiv_url),
+                                title=paper.title.replace("\n", "").replace("  ", " "),
+                                abstract=paper.summary.replace("\n", "").replace("  ", " "),
+                                pdf_url=paper.pdf_url,
+                                authors=", ".join([author.name for author in paper.authors])[:800],
+                                published_time=datetime.fromtimestamp(mktime(paper.updated.timetuple())),
+                                journal_link=paper.journal_ref if hasattr(paper, "journal_ref") else "",
+                                tag=" | ".join(paper.categories),
+                                popularity=0
+                            )
+                            session.add(new_paper)
+                    
+                    # Commit final batch
+                    session.commit()
+            
+            except Exception as e:
+                # Handle other exceptions
+                logging.error(f"Error fetching papers from arXiv: {str(e)}")
+                # Re-raise the exception if it's not an empty page error
+                raise
+            
+            logging.info(f"Finished fetching papers. Added {total_new} new papers.")
+            
+            return total_new > 0  # Return True if any new papers were added

@@ -1,0 +1,14 @@
+arxiv
+sqlalchemy
+python-dotenv
+flask
+psycopg2-binary
+SQLAlchemy-Searchable
+python-twitter
+praw 
+gunicorn 
+supervisor 
+six 
+alembic
+mendeley 
+pyopenssl 
