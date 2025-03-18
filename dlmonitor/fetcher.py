@@ -4,6 +4,7 @@ A class for fetching all sources.
 
 from .sources.arxivsrc import ArxivSource
 from .sources.twittersrc import TwitterSource
+from .sources.naturesrc import NatureSource
 from .db import Base, engine
 
 def get_source(src_name):
@@ -11,6 +12,8 @@ def get_source(src_name):
         return ArxivSource()
     elif src_name == 'twitter':
         return TwitterSource()
+    elif src_name == 'nature':
+        return NatureSource()
     else:
         raise NotImplementedError
 
@@ -21,7 +24,7 @@ def fetch_sources(src_name, fetch_all=False, model=None):
     if fetch_all:
         src.fetch_all()
     else:
-        if src_name == 'arxiv' and model is not None:
+        if src_name in ['arxiv', 'nature'] and model is not None:
             src.fetch_new(model=model)
         else:
             src.fetch_new()

@@ -1,6 +1,6 @@
 import os, sys
 from ..db import create_engine
-from .base import Source
+from .paper_source import PaperSource
 from sqlalchemy_searchable import search
 from sqlalchemy import desc, func
 import time
@@ -13,101 +13,46 @@ import numpy as np
 from pgvector.sqlalchemy import Vector
 
 SEARCH_KEY = "cat:cs.CV+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL+OR+cat:cs.NE+OR+cat:stat.ML"
-MAX_QUERY_NUM = 10000
 
-class ArxivSource(Source):
+class ArxivSource(PaperSource):
+    """
+    Source for fetching and searching arXiv papers.
+    """
+    
+    def __init__(self):
+        super(ArxivSource, self).__init__()
+        self.source_name = "arxiv"
 
     def _get_version(self, arxiv_url):
+        """Extract version number from arXiv URL"""
         version = 1
         last_part = arxiv_url.split("/")[-1]
         if "v" in last_part:
             version = int(last_part.split("v")[-1])
         return version
-
-    def get_one_post(self, arxiv_id):
-        from ..db import get_global_session, ArxivModel
-        session = get_global_session()
-        query = session.query(ArxivModel).filter(ArxivModel.id == int(arxiv_id))
-        results = query.all()
-        if results:
-            return results[0]
-        else:
-            return None
-
-    def get_posts(self, keywords=None, since=None, start=0, num=20, model=None):
-        from ..db import get_global_session, ArxivModel
-        from sentence_transformers import SentenceTransformer
-        from sqlalchemy import func
-        
-        if keywords:
-            keywords = keywords.strip()
-        
-        session = get_global_session()
-        query = session.query(ArxivModel)
-        
-        if since:
-            # Filter date
-            assert isinstance(since, str)
-            query = query.filter(ArxivModel.published_time >= since)
-        
-        if not keywords or keywords.lower() == 'fresh papers':
-            # Recent papers
-            results = (query.order_by(desc(ArxivModel.published_time))
-                       .offset(start).limit(num).all())
-        elif keywords.lower() == 'hot papers':
-            results = (query.order_by(desc(ArxivModel.popularity))
-                              .offset(start).limit(num).all())
-        else:
-            # Check if vector search is available
-            has_embeddings = session.query(ArxivModel).filter(ArxivModel.embedding != None).limit(1).count() > 0
-            
-            if has_embeddings:
-                # Generate query embedding
-                if model is None:
-                    model = SentenceTransformer('all-MiniLM-L6-v2')
-                query_embedding = model.encode(keywords).astype(np.float32)
-                
-                # Use cosine distance method for vector search
-                # Note: cosine_distance = 1 - cosine_similarity, so we ORDER BY ASC
-                results = (session.query(ArxivModel)
-                          .filter(ArxivModel.embedding != None)
-                          .order_by(ArxivModel.embedding.cosine_distance(query_embedding))
-                          .offset(start).limit(num).all())
-                
-                # If vector search results are insufficient, supplement with text search
-            #     if len(results) < num:
-            #         existing_ids = [paper.id for paper in results]
-                    
-            #         search_kw = " or ".join(keywords.split(","))
-            #         remaining = num - len(results)
-                    
-            #         text_results = (search(query.filter(~ArxivModel.id.in_(existing_ids)), 
-            #                               search_kw, sort=True)
-            #                        .limit(remaining).all())
-                    
-            #         results.extend(text_results)
-            # else:
-            #     # Fall back to traditional text search
-            #     search_kw = " or ".join(keywords.split(","))
-            #     results = search(query, search_kw, sort=True).offset(start).limit(num).all()
-        
-        return results
+    
+    def _get_model_class(self):
+        """Get the ArxivModel class for database operations"""
+        from ..db import ArxivModel
+        return ArxivModel
 
     def fetch_new(self, model=None):
         """
         Fetch new papers from arXiv and store them in the database.
-        This implementation directly uses the arxiv library instead of calling query_arxiv.
+        This implementation directly uses the arxiv library.
         Also generates embeddings for new papers using sentence-transformers.
         
         Args:
-            model: 预加载的SentenceTransformer模型实例，如果为None则创建新实例
+            model: Pre-loaded SentenceTransformer model instance
+            
+        Returns:
+            bool: True if new papers were found, False otherwise
         """
         from ..db import session_scope, ArxivModel
-        from sentence_transformers import SentenceTransformer
         
-        # 使用传入的模型或加载新模型
+        # Use the provided model or load a new one
         if model is None:
-            model = SentenceTransformer('all-MiniLM-L6-v2')  # 使用小型模型以提高性能
+            model = SentenceTransformer('all-MiniLM-L6-v2')
         
         # Create client with appropriate configuration
         client = arxiv.Client(
@@ -119,11 +64,11 @@ class ArxivSource(Source):
         # Format the search query correctly
         formatted_query = SEARCH_KEY.replace("+OR+", " OR ")
         
+        self.logger.info(f"开始从arXiv获取论文...")
+        
         with session_scope() as session:
-            # Instead of fetching in batches with multiple API calls,
-            # we'll make a single search with a larger max_results
-            # Use MAX_QUERY_NUM but limit to a reasonable value to avoid memory issues
-            max_results = min(MAX_QUERY_NUM, 2000)  # Limit to 2000 to avoid memory issues
+            # Use max_results value from parent class
+            max_results = min(self.MAX_PAPERS_PER_SOURCE, 2000)
             
             search_query = arxiv.Search(
                 query=formatted_query,
@@ -131,158 +76,193 @@ class ArxivSource(Source):
                 sort_by=arxiv.SortCriterion.LastUpdatedDate
             )
             
-            logging.info(f"Fetching up to {max_results} papers from arXiv...")
-            
             try:
                 # Get results iterator
                 results_iterator = client.results(search_query)
                 
                 # Process results in batches to avoid memory issues
-                batch_size = 32  # 降低批次大小以适应向量生成
+                batch_size = 32
                 batch = []
                 total_new = 0
-                consecutive_empty_batches = 0  # Track consecutive batches with no new papers
+                total_fetched = 0
+                consecutive_empty_batches = 0
+                papers_per_category = {}  # Track papers per category
                 
-                # Process first 200 results (2 pages) which are usually reliable
+                # Process results
                 for i, result in enumerate(results_iterator):
-                    # Process in batches
+                    # Add to current batch
                     batch.append(result)
+                    total_fetched += 1
                     
-                    if len(batch) >= batch_size or i == max_results - 1:  # Process batch or last item
-                        logging.info(f"Processing batch of {len(batch)} papers...")
-                        
-                        # 准备用于检查存在性的 arxiv_url 列表
+                    if len(batch) >= batch_size or i == max_results - 1 or total_fetched >= self.MAX_PAPERS_PER_SOURCE:
+                        # Check which papers already exist
                         arxiv_urls = [paper.entry_id for paper in batch]
                         existing_urls = {url[0] for url in session.query(ArxivModel.arxiv_url).filter(ArxivModel.arxiv_url.in_(arxiv_urls)).all()}
                         
-                        # 为新论文准备数据
+                        # Prepare data for new papers
                         new_papers = []
-                        new_paper_texts = []
                         
-                        anything_new = False  # Reset for each batch
+                        anything_new = False
                         for paper in batch:
                             arxiv_url = paper.entry_id
                             
-                            # Check if paper already exists in database
+                            # Track papers by category
+                            for category in paper.categories:
+                                if category not in papers_per_category:
+                                    papers_per_category[category] = 0
+                                papers_per_category[category] += 1
+                            
+                            # Only process new papers
                             if arxiv_url not in existing_urls:
                                 anything_new = True
                                 total_new += 1
                                 
-                                # 准备文本用于向量生成
-                                title = paper.title.replace("\n", "").replace("  ", " ")
-                                abstract = paper.summary.replace("\n", "").replace("  ", " ")
-                                authors = ", ".join([author.name for author in paper.authors])[:800]
-                                paper_text = f"Title: {title}\nAuthors: {authors}\nAbstract: {abstract}"
-                                new_paper_texts.append(paper_text)
+                                # Prepare paper data
+                                paper_data = {
+                                    'title': paper.title.replace("\n", "").replace("  ", " "),
+                                    'abstract': paper.summary.replace("\n", "").replace("  ", " "),
+                                    'authors': ", ".join([author.name for author in paper.authors])[:800],
+                                    'arxiv_url': arxiv_url,
+                                    'version': self._get_version(arxiv_url),
+                                    'pdf_url': paper.pdf_url,
+                                    'published_time': datetime.fromtimestamp(mktime(paper.updated.timetuple())),
+                                    'journal_link': paper.journal_ref if hasattr(paper, "journal_ref") else "",
+                                    'tag': " | ".join(paper.categories),
+                                    'popularity': 0
+                                }
                                 
-                                # Create new paper record (暂不设置 embedding)
+                                # Process paper data and generate embedding
+                                processed_data, embedding = self._process_paper_metadata(paper_data, model)
+                                
+                                # Create new paper record
                                 new_paper = ArxivModel(
-                                    arxiv_url=arxiv_url,
-                                    version=self._get_version(arxiv_url),
-                                    title=title,
-                                    abstract=abstract,
-                                    pdf_url=paper.pdf_url,
-                                    authors=authors,
-                                    published_time=datetime.fromtimestamp(mktime(paper.updated.timetuple())),
-                                    journal_link=paper.journal_ref if hasattr(paper, "journal_ref") else "",
-                                    tag=" | ".join(paper.categories),
-                                    popularity=0
+                                    arxiv_url=processed_data['arxiv_url'],
+                                    version=processed_data['version'],
+                                    title=processed_data['title'],
+                                    abstract=processed_data['abstract'],
+                                    pdf_url=processed_data['pdf_url'],
+                                    authors=processed_data['authors'],
+                                    published_time=processed_data['published_time'],
+                                    journal_link=processed_data['journal_link'],
+                                    tag=processed_data['tag'],
+                                    popularity=processed_data['popularity'],
+                                    embedding=embedding
                                 )
+                                
                                 new_papers.append(new_paper)
                         
-                        # 如果有新论文，生成向量表示
+                        # Add new papers to session
                         if new_papers:
-                            logging.info(f"Generating embeddings for {len(new_papers)} new papers...")
-                            embeddings = model.encode(new_paper_texts)
-                            
-                            # 设置向量表示并添加到会话
-                            for j, new_paper in enumerate(new_papers):
-                                new_paper.embedding = embeddings[j].astype(np.float32)  # 转换为 float32 以兼容 pgvector
+                            for new_paper in new_papers:
                                 session.add(new_paper)
-                        
-                        # Commit batch and clear
+                            
+                        # Commit batch
                         session.commit()
                         
                         # Update consecutive empty batches counter
                         if anything_new:
-                            consecutive_empty_batches = 0  # Reset counter if we found new papers
+                            consecutive_empty_batches = 0
                         else:
                             consecutive_empty_batches += 1
                         
                         batch = []
                         
-                        # If we've processed at least 100 papers and had 3 consecutive batches with no new papers, we can stop
+                        # Check if we have enough papers for each main category
+                        main_categories_satisfied = True
+                        for main_cat in ["cs.CV", "cs.AI", "cs.LG", "cs.CL"]:
+                            if main_cat not in papers_per_category or papers_per_category[main_cat] < self.MIN_PAPERS_PER_TOPIC:
+                                main_categories_satisfied = False
+                                break
+                        
+                        # Stop conditions
+                        if total_fetched >= self.MAX_PAPERS_PER_SOURCE:
+                            break
+                        
                         if i >= 100 and consecutive_empty_batches >= 3:
-                            logging.info(f"No new papers found in {consecutive_empty_batches} consecutive batches. Stopping.")
+                            break
+                        
+                        if i >= 500 and main_categories_satisfied:
                             break
                 
             except arxiv.UnexpectedEmptyPageError as e:
-                # Handle empty page error - this is common with arXiv API
-                logging.warning(f"Received empty page from arXiv API: {str(e)}")
-                logging.info("This is a common issue with the arXiv API. Processing will continue with the data already fetched.")
+                # Handle empty page error - common with arXiv API
+                self.logger.warning(f"获取arXiv数据时出现空页面错误: {str(e)}")
                 
                 # Process any remaining papers in the batch
                 if batch:
-                    logging.info(f"Processing final batch of {len(batch)} papers...")
-                    
-                    # 准备用于检查存在性的 arxiv_url 列表
-                    arxiv_urls = [paper.entry_id for paper in batch]
-                    existing_urls = {url[0] for url in session.query(ArxivModel.arxiv_url).filter(ArxivModel.arxiv_url.in_(arxiv_urls)).all()}
-                    
-                    # 为新论文准备数据
-                    new_papers = []
-                    new_paper_texts = []
-                    
-                    anything_new = False
-                    for paper in batch:
-                        arxiv_url = paper.entry_id
-                        
-                        # Check if paper already exists in database
-                        if arxiv_url not in existing_urls:
-                            anything_new = True
-                            total_new += 1
-                            
-                            # 准备文本用于向量生成
-                            title = paper.title.replace("\n", "").replace("  ", " ")
-                            abstract = paper.summary.replace("\n", "").replace("  ", " ")
-                            authors = ", ".join([author.name for author in paper.authors])[:800]
-                            paper_text = f"Title: {title}\nAuthors: {authors}\nAbstract: {abstract}"
-                            new_paper_texts.append(paper_text)
-                            
-                            # Create new paper record (暂不设置 embedding)
-                            new_paper = ArxivModel(
-                                arxiv_url=arxiv_url,
-                                version=self._get_version(arxiv_url),
-                                title=title,
-                                abstract=abstract,
-                                pdf_url=paper.pdf_url,
-                                authors=authors,
-                                published_time=datetime.fromtimestamp(mktime(paper.updated.timetuple())),
-                                journal_link=paper.journal_ref if hasattr(paper, "journal_ref") else "",
-                                tag=" | ".join(paper.categories),
-                                popularity=0
-                            )
-                            new_papers.append(new_paper)
-                    
-                    # 如果有新论文，生成向量表示
-                    if new_papers:
-                        logging.info(f"Generating embeddings for {len(new_papers)} new papers...")
-                        embeddings = model.encode(new_paper_texts)
-                        
-                        # 设置向量表示并添加到会话
-                        for j, new_paper in enumerate(new_papers):
-                            new_paper.embedding = embeddings[j].astype(np.float32)  # 转换为 float32 以兼容 pgvector
-                            session.add(new_paper)
-                    
-                    # Commit final batch
-                    session.commit()
+                    total_new = self._process_remaining_batch(session, batch, model, total_new)
             
             except Exception as e:
                 # Handle other exceptions
-                logging.error(f"Error fetching papers from arXiv: {str(e)}")
-                # Re-raise the exception if it's not an empty page error
+                self.logger.error(f"获取arXiv论文时出错: {str(e)}")
                 raise
             
-            logging.info(f"Finished fetching papers. Added {total_new} new papers.")
+            # 简单统计主要类别的论文数量
+            main_cats_count = sum(papers_per_category.get(cat, 0) for cat in ["cs.CV", "cs.AI", "cs.LG", "cs.CL", "cs.NE"])
             
-            return total_new > 0  # Return True if any new papers were added
+            self.logger.info(f"arXiv论文获取完成。共获取{total_fetched}篇论文，其中新增{total_new}篇。机器学习及相关类别共{main_cats_count}篇。")
+            
+            return total_new > 0
+    
+    def _process_remaining_batch(self, session, batch, model, total_new):
+        """Process remaining papers in the batch after an exception"""
+        from ..db import ArxivModel
+        
+        # Check which papers already exist
+        arxiv_urls = [paper.entry_id for paper in batch]
+        existing_urls = {url[0] for url in session.query(ArxivModel.arxiv_url).filter(ArxivModel.arxiv_url.in_(arxiv_urls)).all()}
+        
+        # Prepare data for new papers
+        new_papers = []
+        new_count = total_new
+        
+        for paper in batch:
+            arxiv_url = paper.entry_id
+            
+            # Only process new papers
+            if arxiv_url not in existing_urls:
+                new_count += 1
+                
+                # Prepare paper data
+                paper_data = {
+                    'title': paper.title.replace("\n", "").replace("  ", " "),
+                    'abstract': paper.summary.replace("\n", "").replace("  ", " "),
+                    'authors': ", ".join([author.name for author in paper.authors])[:800],
+                    'arxiv_url': arxiv_url,
+                    'version': self._get_version(arxiv_url),
+                    'pdf_url': paper.pdf_url,
+                    'published_time': datetime.fromtimestamp(mktime(paper.updated.timetuple())),
+                    'journal_link': paper.journal_ref if hasattr(paper, "journal_ref") else "",
+                    'tag': " | ".join(paper.categories),
+                    'popularity': 0
+                }
+                
+                # Process paper data and generate embedding
+                processed_data, embedding = self._process_paper_metadata(paper_data, model)
+                
+                # Create new paper record
+                new_paper = ArxivModel(
+                    arxiv_url=processed_data['arxiv_url'],
+                    version=processed_data['version'],
+                    title=processed_data['title'],
+                    abstract=processed_data['abstract'],
+                    pdf_url=processed_data['pdf_url'],
+                    authors=processed_data['authors'],
+                    published_time=processed_data['published_time'],
+                    journal_link=processed_data['journal_link'],
+                    tag=processed_data['tag'],
+                    popularity=processed_data['popularity'],
+                    embedding=embedding
+                )
+                
+                new_papers.append(new_paper)
+        
+        # Add new papers to session
+        if new_papers:
+            for new_paper in new_papers:
+                session.add(new_paper)
+            
+        # Commit batch
+        session.commit()
+        
+        return new_count

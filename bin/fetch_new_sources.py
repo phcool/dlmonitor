@@ -29,24 +29,25 @@ def run_fetch(src_name):
     """执行获取新论文的操作"""
     logger.info(f"开始获取 {src_name} 的新内容...")
     
-    # 预加载模型，用于arxiv源
+    # 预加载模型，用于需要向量搜索的源
     model = None
-    if src_name == 'arxiv' or src_name == 'all':
+    if src_name in ['arxiv', 'nature', 'all']:
         model = get_model()
         
     # 执行获取操作
     if src_name == "all":
         # 获取所有来源
         fetch_sources("arxiv", model=model)
+        fetch_sources("nature", model=model)
         fetch_sources("twitter")
     else:
-        fetch_sources(src_name, model=model if src_name == 'arxiv' else None)
+        fetch_sources(src_name, model=model if src_name in ['arxiv', 'nature'] else None)
     
     logger.info(f"{src_name} 的新内容获取完成")
 
 if __name__ == '__main__':
     ap = ArgumentParser(description="获取新的论文和推文")
-    ap.add_argument("src", help="来源名称: arxiv, twitter, youtube, reddit, all")
+    ap.add_argument("src", help="来源名称: arxiv, nature, twitter, youtube, reddit, all")
     ap.add_argument("--forever", action="store_true", help="持续运行，每10分钟执行一次")
     ap.add_argument("--interval", type=int, default=600, help="循环执行的间隔时间（秒），默认600秒（10分钟）")
     args = ap.parse_args()

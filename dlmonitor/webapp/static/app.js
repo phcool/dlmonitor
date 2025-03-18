@@ -7,7 +7,7 @@ INIT_KEYWORDS = "arxiv:reinforcement learning,twitter:machine learning,arxiv:lan
 dlmonitor = {
     ajaxCount: 0,
     previewTimeout: null,
-    currentPlatform: 'arxiv' // 默认平台为arxiv
+    currentPlatform: 'arxiv',  // Default platform
 };
 
 dlmonitor.getKeywords = function() {
@@ -23,17 +23,11 @@ dlmonitor.getKeywords = function() {
     return kwList;
 };
 
-// 设置当前选择的平台
-dlmonitor.setPlatform = function(platform) {
-    dlmonitor.currentPlatform = platform;
-    $("#platform-selection").text(platform.charAt(0).toUpperCase() + platform.slice(1));
-}
-
-// 添加平台特定的关键字 - 不再需要，由setPlatform和addKeyword共同完成
+// 添加平台特定的关键字
 dlmonitor.addPlatformKeyword = function(platform) {
     var keyword = $("#new-keyword").val().trim();
     if (!keyword) {
-        alert("Please enter keywords");
+        alert("请输入关键字");
         return;
     }
     
@@ -41,7 +35,13 @@ dlmonitor.addPlatformKeyword = function(platform) {
     $("#new-keyword").val("");
 }
 
-// This requires js-cookie
+// Add platform selection function
+dlmonitor.selectPlatform = function(platform) {
+    dlmonitor.currentPlatform = platform;
+    $("#platform-select").text(platform.charAt(0).toUpperCase() + platform.slice(1));
+};
+
+// Update addKeyword function to use current platform
 dlmonitor.addKeyword = function(w) {
     if (w == undefined || typeof(w) == "object" || !w) {
         w = $("#new-keyword").val()
@@ -50,18 +50,16 @@ dlmonitor.addKeyword = function(w) {
         return;
     }
     if (w.includes(",")) {
-        alert("Keyword can not include comma.");
+        alert("Keyword cannot include comma.");
         return;
     }
     if (w.length > 80) {
-        alert("Keyword can not longer than 80 chars.")
+        alert("Keyword cannot be longer than 80 characters.")
         return;
     }
-    // 确保关键字符合平台:查询格式
-    if (!w.includes(":")) {
-        // 使用当前选择的平台
-        w = dlmonitor.currentPlatform + ":" + w;
-    }
+    
+    // Always use current platform
+    w = dlmonitor.currentPlatform + ":" + w;
     
     $("#new-keyword").val("")
     var kwList = dlmonitor.getKeywords();
@@ -72,7 +70,6 @@ dlmonitor.addKeyword = function(w) {
     kwList.push(w.trim());
     var newKeywords = kwList.join(",");
     Cookies.set("keywords", newKeywords);
-    // dlmonitor.showKeywords();
     dlmonitor.switchPreview(false);
     dlmonitor.updateAll();
 };
@@ -127,13 +124,21 @@ dlmonitor.fetch = function(src_name, keyword, index, start) {
         "<img src='https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/0.16.1/images/loader-large.gif'/>"+
         "</div>");
     dlmonitor.ajaxCount ++;
+    
+    // Get current date range
+    var datetoken = Cookies.get('datetoken');
+    if (!datetoken) {
+        datetoken = '2-week';
+    }
+    
     $.ajax({
        url: '/fetch',
        type: 'POST',
        data: {
           src: src_name,
           start: "" + start,
-          keyword: keyword
+          keyword: keyword,
+          datetoken: datetoken
        },
        error: function() {
            dlmonitor.ajaxCount --;
@@ -211,24 +216,19 @@ dlmonitor.fixFloat = function() {
     });
 };
 
+// Update updateAll function to handle platform:query format
 dlmonitor.updateAll = function(nofetch) {
     dlmonitor.showDate();
     dlmonitor.placeColumns();
     if (nofetch == true) return;
     var kwList = dlmonitor.getKeywords();
     for (var i = 0; i < kwList.length; ++i) {
-        var src;
-        if (kwList[i].includes(":")) {
-            // 新格式 platform:query
-            src = kwList[i].split(":")[0].trim().toLowerCase();
-        } else if (kwList[i].toLowerCase().includes("tweets")) {
-            // 兼容旧格式
-            src = 'twitter';
-        } else {
-            // 默认
-            src = 'arxiv';
+        var parts = kwList[i].split(":");
+        if (parts.length === 2) {
+            var src = parts[0];
+            var keyword = parts[1];
+            dlmonitor.fetch(src, kwList[i], i, start=0);
         }
-        dlmonitor.fetch(src, kwList[i], i, start=0);
     }
 };
 
@@ -240,27 +240,6 @@ dlmonitor.switchPreview = function(flag) {
         $(".preview").hide();
         $(".post-columns").show();
     }
-};
-
-dlmonitor.save_mendeley = function(pdf_url, paper_title) {
-    $.notify("Saving " + paper_title, "info");
-    dlmonitor.ajaxCount ++;
-    $.ajax({
-       url: '/save_mendeley',
-       type: 'GET',
-       data: {
-          url: pdf_url
-       },
-       error: function() {
-            dlmonitor.ajaxCount --;
-            $.notify("Error when saving paper.", "error");
-       },
-       success: function(data) {
-          // console.log(data);
-          dlmonitor.ajaxCount --;
-          $.notify(data, "success");
-       }
-    });
 };
 
 dlmonitor.load_fulltext = function(arxiv_token) {
@@ -305,13 +284,10 @@ dlmonitor.retrieve_fulltext = function() {
   });
 };
 
+// Update preview functionality to use current platform
 dlmonitor.init = function() {
     dlmonitor.updateAll(true);
-    // 设置默认平台
-    dlmonitor.setPlatform('arxiv');
-    
     $("#new-keyword").keypress(function(e) {
-        // Enter key pressed
         if(e.which == 13) {
             dlmonitor.addKeyword();
             return false;
@@ -325,10 +301,9 @@ dlmonitor.init = function() {
         dlmonitor.previewTimeout = setTimeout(function() {
             var text = $("#new-keyword").val();
             if ($("#new-keyword").is(":focus") && text.length >= 3) {
-                $("#preview-kw").html(text);
+                $("#preview-kw").html(dlmonitor.currentPlatform + ":" + text);
                 $("#posts-preview").height(($(window).height() - 160) + "px")
                 dlmonitor.switchPreview(true);
-                // 使用当前平台进行预览
                 dlmonitor.fetch(dlmonitor.currentPlatform, dlmonitor.currentPlatform + ":" + text, 'preview');
             } else {
                 dlmonitor.switchPreview(false);
@@ -346,5 +321,15 @@ dlmonitor.init = function() {
 
 // Document ready
 $(function(){
-    dlmonitor.init();
+    dlmonitor.updateAll();
+    $("#new-keyword").keypress(function(e) {
+        // Enter key pressed
+        if(e.which == 13) {
+            dlmonitor.addKeyword();
+            return false;
+        }
+    });
+    $("#new-keyword-btn").click(function(){
+        dlmonitor.addKeyword();
+    });
 });
