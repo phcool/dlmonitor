@@ -10,7 +10,6 @@ class PaperSource(Source):
     
     # Default parameters for paper sources
     MAX_PAPERS_PER_SOURCE = 1000  # Maximum number of papers to fetch per source
-    MIN_PAPERS_PER_TOPIC = 10     # Minimum number of papers to try to get per topic
     
     def __init__(self):
         super(PaperSource, self).__init__()
@@ -74,33 +73,9 @@ class PaperSource(Source):
             # Filter date
             assert isinstance(since, str)
             query = query.filter(model_class.published_time >= since)
-        
-        if not keywords or keywords.lower() == 'fresh papers':
-            # Recent papers
-            results = (query.order_by(desc(model_class.published_time))
-                       .offset(start).limit(num).all())
-        elif keywords.lower() == 'hot papers':
-            results = (query.order_by(desc(model_class.popularity))
-                      .offset(start).limit(num).all())
-        else:
+
             # Vector search if embedding field exists
-            results = self._search_by_vector(session, model_class, keywords, start, num, model)
-            
-            # Fall back to traditional search if vector search is not available or returns no results
-            if not results and hasattr(model_class, 'title') and hasattr(model_class, 'abstract'):
-                from sqlalchemy import or_
-                # Traditional text search fallback
-                search_terms = keywords.split()
-                filters = []
-                for term in search_terms:
-                    filters.append(or_(
-                        model_class.title.ilike(f'%{term}%'),
-                        model_class.abstract.ilike(f'%{term}%')
-                    ))
-                
-                results = (query.filter(*filters)
-                          .order_by(desc(model_class.published_time))
-                          .offset(start).limit(num).all())
+        results = self._search_by_vector(session, model_class, keywords, start, num, model)
         
         return results
     
@@ -132,6 +107,7 @@ class PaperSource(Source):
             from sentence_transformers import SentenceTransformer
             if model is None:
                 model = SentenceTransformer('all-MiniLM-L6-v2')
+            
             query_embedding = model.encode(keywords).astype(np.float32)
             
             # Use cosine distance method for vector search

@@ -1,139 +1,171 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>Deep Learning Monitor - Find new Arxiv papers, tweets and Reddit posts for you</title>
-<meta name="keywords" content="deep learning, paper, arxiv, twitter" />
-<meta name="description" content="Things happening in deep learning: arxiv, twitter, reddit" />
-<meta name="google-site-verification" content="A0p3rf1h5jIhgy_phfuve3Q_LrTzaR0_I4t9i3c4zxI" />
-<meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' name='viewport' />
-<link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:200,300,400,600,700,900" rel="stylesheet" />
-<link href="https://bootswatch.com/3/darkly/bootstrap.min.css" rel="stylesheet">
-<link href="/static/default.css?v=20" rel="stylesheet" type="text/css" media="all" />
-<link href="/static/mobile.css?v=5" rel="stylesheet" type="text/css" media="all" />
-<script src="https://use.fontawesome.com/f194410606.js"></script>
-<script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
-<!-- <script type="text/javascript" src="https://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script> -->
-<script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/js-cookie/2.1.4/js.cookie.min.js"></script>
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/notify/0.4.2/notify.min.js"></script>
-<script type="text/javascript" src="/static/app.js?v=20"></script>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deep Learning Monitor - Find new Arxiv papers, tweets and Nature articles</title>
+  <meta name="keywords" content="deep learning, paper, arxiv, twitter, nature" />
+  <meta name="description" content="Things happening in deep learning: arxiv, twitter, nature" />
+  <meta name="google-site-verification" content="A0p3rf1h5jIhgy_phfuve3Q_LrTzaR0_I4t9i3c4zxI" />
+  
+  <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:200,300,400,600,700,900" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="/static/modern.css" rel="stylesheet" type="text/css" />
+  
+  <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/js-cookie/3.0.1/js.cookie.min.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/notify/0.4.2/notify.min.js"></script>
+  <script type="text/javascript" src="/static/modern.js"></script>
+  <script type="text/javascript" src="/static/app.js?v=21"></script>
 </head>
 <body>
 
 <div id="wrapper" class="container">
-
-    <nav class="navbar navbar-default">
-        <div class="row">
-            <div class="col-md-4 logo">
-                <div style="white-space: nowrap;overflow: hidden;"><h1><a href="/">Deep Learning Monitor</a></h1></div>
-                <div class="menu">
-                    &nbsp;
-                    <span class="fa fa-angle-right"></span>&nbsp;&nbsp;
-                    <a href="/about">About</a>
-                </div>
+  <nav class="navbar">
+    <div class="row">
+      <div class="col-4 logo">
+        <div style="white-space: nowrap;overflow: hidden;"><h1><a href="/">Monitor</a></h1></div>
+      </div>
+      <div class="col-8">
+        <div class="input-group">
+          <input type="text" id="new-keyword" class="form-control" placeholder="Enter search keywords">
+          <div class="input-group-btn">
+            <div class="dropdown">
+              <button class="btn btn-default dropdown-toggle" type="button">
+                <span id="platform-select">arXiv</span> <span class="caret"></span>
+              </button>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="javascript:dlmonitor.selectPlatform('arxiv');">arXiv</a></li>
+                <li><a class="dropdown-item" href="javascript:dlmonitor.selectPlatform('nature');">Nature</a></li>
+                <li><a class="dropdown-item" href="javascript:dlmonitor.selectPlatform('github');">GitHub</a></li>
+                <li><a class="dropdown-item" href="javascript:dlmonitor.selectPlatform('twitter');">Twitter</a></li>
+              </ul>
             </div>
-            <div class="col-md-8">
-                <div class="input-group keyword-group" style="margin: 12px;">
-                  <input type="text" id="new-keyword" class="form-control" placeholder="Enter search keywords">
-                  <span class="input-group-btn">
-                    <div class="btn-group">
-                      <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                        <span id="platform-select">arXiv</span> <span class="caret"></span>
-                      </button>
-                      <ul class="dropdown-menu">
-                        <li><a href="javascript:dlmonitor.selectPlatform('arxiv');">arXiv</a></li>
-                        <li><a href="javascript:dlmonitor.selectPlatform('nature');">Nature</a></li>
-                        <li><a href="javascript:dlmonitor.selectPlatform('twitter');">Twitter</a></li>
-                      </ul>
-                    </div>
-                    <button id="new-keyword-btn" class="btn btn-default" type="button">Add Monitor</button>
-                  </span>
-                </div>
-                <div class="input-group keyword-group" style="margin: 0 12px;">
-                  <span class="input-group-btn">
-                    <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                      <span id="date-info">Recent two weeks</span> <span class="caret"></span>
-                    </button>
-                    <ul class="dropdown-menu">
-                      <li><a href="javascript:dlmonitor.filterDate('1-week');">Recent one week</a></li>
-                      <li><a href="javascript:dlmonitor.filterDate('2-week');">Recent two weeks</a></li>
-                      <li><a href="javascript:dlmonitor.filterDate('1-month');">Recent one month</a></li>
-                    </ul>
-                  </span>
-                </div>
-            </div>
+            <button id="new-keyword-btn" class="btn btn-default" type="button">Add Monitor</button>
+          </div>
         </div>
-    </nav>
-
-	<div id="column-template" style="display:none;">
-		<div class="column">
-			<div class="panel panel-default">
-			  <div class="panel-heading clearfix">
-				<h3 id="column-title-NUM" class="panel-title"></h3>
-				<span id="close-btn-NUM" class="close-btn label" onclick="dlmonitor.removeKeyword(this);">
-					<span class="fa fa-close"></span>
-				</span>
-                <span id="right-btn-NUM" class="right-btn close-btn label" onclick="dlmonitor.moveKeyword(this, 1);">
-					<span class="fa fa-arrow-right"></span>
-				</span>
-                <span id="left-btn-NUM" class="left-btn close-btn label" onclick="dlmonitor.moveKeyword(this, -1);">
-					<span class="fa fa-arrow-left"></span>
-				</span>
-			  </div>
-			  <div id="posts-NUM" class="panel-body">
-				  Loading ...
-			  </div>
-			</div>
-		</div>
-	</div>
-	<div class="post-columns-wrapper">
-		<div class="post-columns-frame">
-		    <div class="post-columns" id="post-columns">
-                {% for src, kw, posts in columns %}
-                <div class="column">
-        			<div class="panel panel-default">
-        			  <div class="panel-heading clearfix">
-        				<h3 id="column-title-{{ loop.index0 }}" class="panel-title">{{ kw }}</h3>
-        				<span id="close-btn-{{ loop.index0 }}" class="close-btn label" onclick="dlmonitor.removeKeyword(this);">
-        					<span class="fa fa-close"></span>
-        				</span>
-                        <span id="right-btn-{{ loop.index0 }}" class="right-btn close-btn label" onclick="dlmonitor.moveKeyword(this, 1);">
-        					<span class="fa fa-arrow-right"></span>
-        				</span>
-                        <span id="left-btn-{{ loop.index0 }}" class="left-btn close-btn label" onclick="dlmonitor.moveKeyword(this, -1);">
-        					<span class="fa fa-arrow-left"></span>
-        				</span>
-        			  </div>
-        			  <div id="posts-{{ loop.index0 }}" class="panel-body">
-        				  {% include 'post_'+src+'.html' %}
-        			  </div>
-        			</div>
-        		</div>
-                {% endfor %}
+        <div class="input-group">
+          <div class="input-group-btn">
+            <div class="dropdown">
+              <button class="btn btn-default dropdown-toggle" type="button">
+                <span id="date-info">Recent two weeks</span> <span class="caret"></span>
+              </button>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="javascript:dlmonitor.filterDate('1-week');">Recent one week</a></li>
+                <li><a class="dropdown-item" href="javascript:dlmonitor.filterDate('2-week');">Recent two weeks</a></li>
+                <li><a class="dropdown-item" href="javascript:dlmonitor.filterDate('1-month');">Recent one month</a></li>
+              </ul>
             </div>
-		</div>
-	</div>
-    <div class="preview" style="display: none;">
-        <div class="panel panel-default">
-          <div class="panel-heading clearfix">
-            <h3 id="column-title-preview" class="panel-title">preview: <span id="preview-kw"></span></h3>
-            <span id="close-btn-preview" class="close-btn label">
-                <span class="fa fa-close"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div id="column-template" style="display:none;">
+    <div class="column">
+      <div class="panel panel-default">
+        <div class="panel-heading clearfix">
+          <h3 id="column-title-NUM" class="panel-title"></h3>
+          <div>
+            <span class="sort-control">
+              <div class="dropdown">
+                <button class="btn btn-xs btn-default dropdown-toggle" type="button">
+                  <span id="sort-info-NUM">Time</span> <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-right sort-dropdown">
+                  <li><a href="javascript:dlmonitor.sortColumn(NUM, 'time');"><i class="fas fa-clock"></i> Time</a></li>
+                  <li><a href="javascript:dlmonitor.sortColumn(NUM, 'relevance');"><i class="fas fa-search"></i> Relevance</a></li>
+                  <li><a href="javascript:dlmonitor.sortColumn(NUM, 'popularity');"><i class="fas fa-fire"></i> Popularity</a></li>
+                </ul>
+              </div>
+            </span>
+            <span id="close-btn-NUM" class="close-btn" onclick="dlmonitor.removeKeyword(this);">
+              <i class="fas fa-times"></i>
+            </span>
+            <span id="left-btn-NUM" class="left-btn" onclick="dlmonitor.moveKeyword(this, -1);" style="display:none">
+              <i class="fas fa-arrow-left"></i>
+            </span>
+            <span id="right-btn-NUM" class="right-btn" onclick="dlmonitor.moveKeyword(this, 1);" style="display:none">
+              <i class="fas fa-arrow-right"></i>
             </span>
           </div>
-          <div id="posts-preview" class="panel-body">
-
+        </div>
+        <div id="posts-NUM" class="panel-body">
+          Loading ...
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="post-columns-wrapper">
+    <div class="post-columns-frame">
+      <div class="post-columns" id="post-columns">
+        {% for src, kw, posts, sort_type in columns %}
+        <div class="column">
+          <div class="panel panel-default">
+            <div class="panel-heading clearfix">
+              <h3 id="column-title-{{ loop.index0 }}" class="panel-title">{{ kw }}</h3>
+              <div>
+                <span class="sort-control">
+                  <div class="dropdown">
+                    <button class="btn btn-xs btn-default dropdown-toggle" type="button">
+                      <span id="sort-info-{{ loop.index0 }}">
+                        {% if sort_type == 'time' %}
+                          <i class="fas fa-clock"></i> Time
+                        {% elif sort_type == 'relevance' %}
+                          <i class="fas fa-search"></i> Relevance
+                        {% elif sort_type == 'popularity' %}
+                          <i class="fas fa-fire"></i> Popularity
+                        {% else %}
+                          <i class="fas fa-clock"></i> Time
+                        {% endif %}
+                      </span> <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-right sort-dropdown">
+                      <li><a href="javascript:dlmonitor.sortColumn({{ loop.index0 }}, 'time');"><i class="fas fa-clock"></i> Time</a></li>
+                      <li><a href="javascript:dlmonitor.sortColumn({{ loop.index0 }}, 'relevance');"><i class="fas fa-search"></i> Relevance</a></li>
+                      <li><a href="javascript:dlmonitor.sortColumn({{ loop.index0 }}, 'popularity');"><i class="fas fa-fire"></i> Popularity</a></li>
+                    </ul>
+                  </div>
+                </span>
+                <span id="close-btn-{{ loop.index0 }}" class="close-btn" onclick="dlmonitor.removeKeyword(this);">
+                  <i class="fas fa-times"></i>
+                </span>
+                <span id="left-btn-{{ loop.index0 }}" class="left-btn" onclick="dlmonitor.moveKeyword(this, -1);" style="display:none">
+                  <i class="fas fa-arrow-left"></i>
+                </span>
+                <span id="right-btn-{{ loop.index0 }}" class="right-btn" onclick="dlmonitor.moveKeyword(this, 1);" style="display:none">
+                  <i class="fas fa-arrow-right"></i>
+                </span>
+              </div>
+            </div>
+            <div id="posts-{{ loop.index0 }}" class="panel-body">
+              {% include 'post_list.html' %}
+            </div>
           </div>
         </div>
+        {% endfor %}
+      </div>
     </div>
-
+  </div>
+  
+  <div class="preview" style="display: none;">
+    <div class="panel panel-default">
+      <div class="panel-heading clearfix">
+        <h3 id="column-title-preview" class="panel-title">preview: <span id="preview-kw"></span></h3>
+        <span id="close-btn-preview" class="close-btn">
+          <i class="fas fa-times"></i>
+        </span>
+      </div>
+      <div id="posts-preview" class="panel-body">
+      </div>
+    </div>
+  </div>
 </div>
 
 <script type="text/javascript" defer="defer">
-    dlmonitor.init();
+  dlmonitor.init();
 </script>
 {% include 'track.html' %}
 </body>

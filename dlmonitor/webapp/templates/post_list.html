@@ -1,0 +1,65 @@
+{% for post in posts %}
+<div class="post">
+    <div class="title">
+        {% if post.html_url %}
+            <a href="{{ post.html_url }}" target="_blank">{{ post.repo_name }}</a>
+        {% else %}
+            <a href="{{ post.arxiv_url if post.arxiv_url else post.article_url }}" target="_blank">{{ post.title }}</a>
+        {% endif %}
+    </div>
+    <div class="author">
+        {% if post.full_name %}
+            {{ post.full_name }}
+        {% else %}
+            {{ post.authors }}
+        {% endif %}
+    </div>
+    {% if post.description %}
+    <div class="abstract">{{ post.description }}</div>
+    {% endif %}
+    <div class="tools clearfix">
+        <span class="btns">
+            {% if post.updated_at %}
+                <span class="label label-default">{{ post.updated_at.strftime('%Y-%m-%d') }}</span>
+            {% else %}
+                <span class="label label-default">{{ post.published_time.strftime('%Y-%m-%d') }}</span>
+            {% endif %}
+            
+            {% if post.language %}
+                <span class="label label-info">{{ post.language }}</span>
+            {% elif post.journal %}
+                <span class="label label-info">{{ post.journal }}</span>
+            {% endif %}
+            
+            {% if post.clone_url %}
+                <button type="button" class="btn btn-info" onclick="navigator.clipboard.writeText('{{ post.clone_url }}'); $.notify('Clone URL copied!', 'success');">Clone</button>
+            {% elif post.pdf_url %}
+                <button type="button" class="btn btn-info" onclick="window.open('{{ post.pdf_url }}', '_blank');">PDF</button>
+            {% elif post.doi %}
+                <button type="button" class="btn btn-info" onclick="window.open('https://www.nature.com/articles/{{ post.doi.split('/')[-1] }}.pdf', '_blank');">PDF</button>
+            {% endif %}
+            
+            {% if post.stars %}
+                {% if post.stars > 1000 %}
+                    <span class="label label-hot">⭐ {{ '%d' % (post.stars / 1000) }}k+</span>
+                {% elif post.stars > 100 %}
+                    <span class="label label-hot">⭐ {{ post.stars }}</span>
+                {% endif %}
+            {% elif post.popularity > 50 %}
+                <span class="label label-hot">Super Hot</span>
+            {% elif post.popularity > 3 %}
+                <span class="label label-hot">Hot</span>
+            {% endif %}
+            
+            {% if post.topics %}
+                <span class="label label-primary">{{ post.topics.split(',')[0] }}</span>
+            {% elif post.arxiv_id %}
+                <span class="label label-primary">arXiv: {{ post.arxiv_id }}</span>
+            {% elif post.doi %}
+                <span class="label label-primary">DOI: {{ post.doi }}</span>
+            {% endif %}
+        </span>
+    </div>
+</div>
+<div class="hrline"></div>
+{% endfor %} 

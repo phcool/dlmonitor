@@ -2,12 +2,13 @@
 Javascript for Deep Community.
 */
 
-INIT_KEYWORDS = "arxiv:reinforcement learning,twitter:machine learning,arxiv:language,twitter:AI news";
+INIT_KEYWORDS = "arxiv:large language model,nature:machine learning,github:llm";
 
 dlmonitor = {
     ajaxCount: 0,
     previewTimeout: null,
     currentPlatform: 'arxiv',  // Default platform
+    sortPreferences: {}  // 存储每个列的排序偏好
 };
 
 dlmonitor.getKeywords = function() {
@@ -58,8 +59,11 @@ dlmonitor.addKeyword = function(w) {
         return;
     }
     
-    // Always use current platform
-    w = dlmonitor.currentPlatform + ":" + w;
+    // 检查是否已经包含平台前缀
+    if (!w.includes(":")) {
+        // 如果没有前缀，添加当前平台前缀
+        w = dlmonitor.currentPlatform + ":" + w;
+    }
     
     $("#new-keyword").val("")
     var kwList = dlmonitor.getKeywords();
@@ -116,9 +120,62 @@ dlmonitor.showKeywords = function() {
     $("#keywords").html(newHtml);
 };
 
-dlmonitor.fetch = function(src_name, keyword, index, start) {
+// 从cookie加载排序偏好
+dlmonitor.loadSortPreferences = function() {
+    var sortPrefs = Cookies.get('sortPreferences');
+    if (sortPrefs) {
+        try {
+            dlmonitor.sortPreferences = JSON.parse(sortPrefs);
+        } catch (e) {
+            console.error("Failed to parse sort preferences", e);
+            dlmonitor.sortPreferences = {};
+        }
+    }
+};
+
+// 保存排序偏好到cookie
+dlmonitor.saveSortPreferences = function() {
+    Cookies.set('sortPreferences', JSON.stringify(dlmonitor.sortPreferences));
+};
+
+// 获取特定keyword的排序偏好
+dlmonitor.getSortPreference = function(keyword) {
+    return dlmonitor.sortPreferences[keyword] || 'time';
+};
+
+// 设置排序和刷新数据
+dlmonitor.sortColumn = function(index, sortType) {
+    var kw = $("#column-title-" + index).text();
+    
+    // 更新排序偏好
+    dlmonitor.sortPreferences[kw] = sortType;
+    dlmonitor.saveSortPreferences();
+    
+    // 更新UI，添加适当的图标
+    var iconHtml = '';
+    if (sortType === 'time') {
+        iconHtml = '<i class="fas fa-clock"></i> ';
+    } else if (sortType === 'relevance') {
+        iconHtml = '<i class="fas fa-search"></i> ';
+    } else if (sortType === 'popularity') {
+        iconHtml = '<i class="fas fa-fire"></i> ';
+    }
+    
+    $("#sort-info-" + index).html(iconHtml + sortType.charAt(0).toUpperCase() + sortType.slice(1));
+    
+    // 重新加载数据
+    var parts = kw.split(":");
+    if (parts.length === 2) {
+        var src = parts[0];
+        dlmonitor.fetch(src, kw, index, 0, sortType);
+    }
+};
+
+dlmonitor.fetch = function(src_name, keyword, index, start, sortType) {
     if (start == undefined) start = 0;
-    console.log("fetch", src_name, keyword, index, start);
+    if (sortType == undefined) sortType = dlmonitor.getSortPreference(keyword);
+    
+    console.log("fetch", src_name, keyword, index, start, sortType);
     $("#posts-" + index).html(
         "<div style='text-align:center;'>"+
         "<img src='https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/0.16.1/images/loader-large.gif'/>"+
@@ -138,7 +195,8 @@ dlmonitor.fetch = function(src_name, keyword, index, start) {
           src: src_name,
           start: "" + start,
           keyword: keyword,
-          datetoken: datetoken
+          datetoken: datetoken,
+          sort: sortType  // 添加排序参数
        },
        error: function() {
            dlmonitor.ajaxCount --;
@@ -227,7 +285,7 @@ dlmonitor.updateAll = function(nofetch) {
         if (parts.length === 2) {
             var src = parts[0];
             var keyword = parts[1];
-            dlmonitor.fetch(src, kwList[i], i, start=0);
+            dlmonitor.fetch(src, kwList[i], i, 0);
         }
     }
 };
@@ -286,6 +344,9 @@ dlmonitor.retrieve_fulltext = function() {
 
 // Update preview functionality to use current platform
 dlmonitor.init = function() {
+    // 加载排序偏好
+    dlmonitor.loadSortPreferences();
+    
     dlmonitor.updateAll(true);
     $("#new-keyword").keypress(function(e) {
         if(e.which == 13) {

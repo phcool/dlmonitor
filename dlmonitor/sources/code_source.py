@@ -4,6 +4,8 @@ Code source base class for code repositories like GitHub, GitLab, etc.
 from .base import Source
 import numpy as np
 from datetime import datetime
+import time
+from sentence_transformers import SentenceTransformer
 
 class CodeSource(Source):
     """Base class for code repository sources"""
@@ -11,6 +13,7 @@ class CodeSource(Source):
     def __init__(self):
         super(CodeSource, self).__init__()
         self.source_type = Source.SOURCE_TYPE_CODE
+        self.MAX_REPOS_PER_SOURCE = 100  # 默认最大获取数量
     
     def get_one_post(self, repo_id):
         """
@@ -22,6 +25,36 @@ class CodeSource(Source):
         Returns:
             object: Repository object if found, None otherwise
         """
+        if not repo_id:
+            self.logger.error("Invalid repository ID")
+            return None
+            
+        try:
+            # 第一步：尝试从数据库获取
+            repo = self._get_repo_from_db(repo_id)
+            if repo:
+                return repo
+            
+            # 第二步：如果数据库中没有，从外部源获取
+            repo = self._fetch_repo_from_external_source(repo_id)
+            if repo:
+                return repo
+                
+            return None
+        except Exception as e:
+            self.logger.error(f"Error in get_one_post: {str(e)}")
+            return None
+            
+    def _get_repo_from_db(self, repo_id):
+        """
+        从数据库获取仓库数据
+        
+        Args:
+            repo_id: 仓库ID
+            
+        Returns:
+            object: 仓库对象，如果未找到则返回None
+        """
         from ..db import get_global_session
         
         # Get the appropriate model class for this source
@@ -30,10 +63,58 @@ class CodeSource(Source):
             return None
             
         session = get_global_session()
-        query = session.query(model_class).filter(model_class.id == int(repo_id))
-        results = query.all()
         
-        return results[0] if results else None
+        # 使用正确的主键字段进行查询
+        primary_key = getattr(model_class, 'repo_id', None) or getattr(model_class, 'id', None)
+        if primary_key is None:
+            self.logger.error("Could not determine primary key field for repository")
+            return None
+            
+        try:
+            query = session.query(model_class).filter(primary_key == repo_id)
+            results = query.all()
+            
+            return results[0] if results else None
+        except Exception as e:
+            self.logger.error(f"Error querying database for repository {repo_id}: {str(e)}")
+            return None
+            
+    def _fetch_repo_from_external_source(self, repo_id):
+        """
+        从外部源获取仓库数据（如GitHub API等）
+        这是一个钩子方法，默认返回None，子类应该根据需要重写
+        
+        Args:
+            repo_id: 仓库ID
+            
+        Returns:
+            object: 仓库对象，如果未找到则返回None
+        """
+        return None
+        
+    def _save_repo_to_db(self, repo):
+        """
+        将仓库对象保存到数据库
+        
+        Args:
+            repo: 仓库对象
+            
+        Returns:
+            bool: 保存成功返回True，否则返回False
+        """
+        try:
+            from ..db import get_global_session
+            session = get_global_session()
+            session.add(repo)
+            session.commit()
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to save repository to database: {str(e)}")
+            try:
+                session.rollback()
+            except:
+                pass
+            return False
     
     def get_posts(self, keywords=None, since=None, start=0, num=20, model=None):
         """
@@ -60,10 +141,15 @@ class CodeSource(Source):
         session = get_global_session()
         query = session.query(model_class)
         
-        if since:
+        # 确定使用哪个日期字段
+        date_field = getattr(model_class, 'updated_at', None)
+        if date_field is None:
+            date_field = getattr(model_class, 'published_time', None)
+        
+        if since and date_field is not None:
             # Filter date
             assert isinstance(since, str)
-            query = query.filter(model_class.updated_at >= since)
+            query = query.filter(date_field >= since)
         
         # Perform keyword search if provided
         if keywords and keywords.strip():
@@ -78,12 +164,11 @@ class CodeSource(Source):
                 filters = []
                 
                 searchable_fields = []
-                if hasattr(model_class, 'repo_name'):
-                    searchable_fields.append(model_class.repo_name)
-                if hasattr(model_class, 'description'):
-                    searchable_fields.append(model_class.description)
-                if hasattr(model_class, 'readme'):
-                    searchable_fields.append(model_class.readme)
+                
+                # 动态确定可搜索字段
+                for field_name in ['repo_name', 'description', 'readme', 'title', 'abstract', 'full_name', 'topics']:
+                    if hasattr(model_class, field_name):
+                        searchable_fields.append(getattr(model_class, field_name))
                     
                 for term in search_terms:
                     term_filters = []
@@ -93,15 +178,22 @@ class CodeSource(Source):
                         filters.append(or_(*term_filters))
                 
                 if filters:
-                    results = (query.filter(*filters)
-                             .order_by(desc(model_class.updated_at))
-                             .offset(start).limit(num).all())
+                    if date_field is not None:
+                        results = (query.filter(*filters)
+                                 .order_by(desc(date_field))
+                                 .offset(start).limit(num).all())
+                    else:
+                        results = (query.filter(*filters)
+                                 .offset(start).limit(num).all())
                 else:
                     results = []
         else:
             # Return recent repositories if no search keywords
-            results = (query.order_by(desc(model_class.updated_at))
-                      .offset(start).limit(num).all())
+            if date_field is not None:
+                results = (query.order_by(desc(date_field))
+                          .offset(start).limit(num).all())
+            else:
+                results = query.offset(start).limit(num).all()
         
         return results
     
@@ -130,7 +222,6 @@ class CodeSource(Source):
         
         # Generate query embedding
         try:
-            from sentence_transformers import SentenceTransformer
             if model is None:
                 model = SentenceTransformer('all-MiniLM-L6-v2')
             query_embedding = model.encode(keywords).astype(np.float32)
@@ -148,6 +239,7 @@ class CodeSource(Source):
     def _process_repo_data(self, repo_data, embedding_model=None):
         """
         Process repository data and generate embedding if model is provided.
+        基类方法，子类应根据自己的需求重写
         
         Args:
             repo_data: Dictionary with repository metadata
@@ -156,10 +248,15 @@ class CodeSource(Source):
         Returns:
             tuple: (processed_data, embedding)
         """
-        # Process text fields
-        repo_name = repo_data.get('repo_name', '').strip()
-        description = repo_data.get('description', '').replace("\n", " ").replace("  ", " ")
-        readme = repo_data.get('readme', '').replace("\n", " ").replace("  ", " ")
+        # Process text fields with safe handling of None values
+        repo_name = repo_data.get('repo_name', '') or ''
+        repo_name = repo_name.strip()
+        
+        description = repo_data.get('description', '') or ''
+        description = description.replace("\n", " ").replace("  ", " ")
+        
+        readme = repo_data.get('readme', '') or ''
+        readme = readme.replace("\n", " ").replace("  ", " ")
         
         # Generate embedding if model is provided
         embedding = None
@@ -171,12 +268,74 @@ class CodeSource(Source):
                 self.logger.error(f"Failed to generate embedding: {str(e)}")
         
         # Update repo_data with processed fields
-        repo_data['repo_name'] = repo_name
-        repo_data['description'] = description
-        repo_data['readme'] = readme
+        processed_data = {
+            'repo_name': repo_name,
+            'description': description,
+            'readme': readme
+        }
         
-        return repo_data, embedding
+        return processed_data, embedding
     
+    def _process_batch(self, session, batch, model, existing_ids=None):
+        """
+        处理仓库批次并添加到数据库
+        基类方法，子类应根据自己的需求重写
+        
+        Args:
+            session: 数据库会话
+            batch: 仓库数据批次
+            model: 嵌入模型
+            existing_ids: 已存在的仓库ID集合
+            
+        Returns:
+            int: 新增仓库数量
+        """
+        self.logger.warning("_process_batch() not implemented in base class")
+        return 0
+        
+    def _fetch(self, search_queries, max_repos=None, model=None, batch_size=10):
+        """
+        通用仓库获取函数，支持单个或多个搜索查询
+        基类方法，子类应根据自己的需求重写
+        
+        Args:
+            search_queries: 单个查询或查询列表
+            max_repos: 最大获取仓库数量
+            model: 预加载的嵌入模型
+            batch_size: 处理的批次大小
+            
+        Returns:
+            int: 获取的新仓库数量
+        """
+        self.logger.warning("_fetch() not implemented in base class")
+        return 0
+    
+    def fetch_new(self, model=None):
+        """
+        Fetch new repositories.
+        
+        Args:
+            model: Optional pre-loaded model for embeddings
+            
+        Returns:
+            int: Number of new repositories fetched
+        """
+        self.logger.warning("fetch_new() not implemented")
+        return 0
+        
+    def fetch_all(self, model=None):
+        """
+        Fetch a large number of historical repositories.
+        
+        Args:
+            model: Optional pre-loaded model for embeddings
+            
+        Returns:
+            int: Total number of repositories fetched
+        """
+        self.logger.warning("fetch_all() not implemented")
+        return 0
+        
     def _link_paper_to_code(self, paper_url, repo_url):
         """
         Create a link between a paper and a code repository.

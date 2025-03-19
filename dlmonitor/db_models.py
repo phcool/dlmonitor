@@ -96,3 +96,34 @@ class WorkingQueueModel(Base):
 
     def __repr__(self):
         return __tablename__ + self.id
+
+class GitHubModel(Base):
+
+    __tablename__ = 'github'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    repo_id = Column(String(255), primary_key=True)  # GitHub API 返回的仓库 ID
+    repo_name = Column(String(255))  # 仓库名称
+    full_name = Column(String(255))  # 完整仓库名称 (owner/repo)
+    description = Column(Text(collation=''))
+    html_url = Column(String(255))  # GitHub 仓库页面 URL
+    clone_url = Column(String(255))  # Git 克隆 URL
+    stars = Column(Integer)  # 星标数
+    forks = Column(Integer)  # 分支数
+    language = Column(String(50))  # 主要编程语言
+    topics = Column(Text(collation=''))  # 仓库主题标签
+    readme = Column(Text(collation=''))  # README 内容
+    updated_at = Column(DateTime())  # 最后更新时间
+    created_at = Column(DateTime())  # 创建时间
+    
+    # 向量表示，使用 pgvector 扩展
+    embedding = Column(Vector(384), nullable=True)  # 使用 sentence-transformers 的默认维度 (384)
+
+    # For full text search
+    search_vector = Column(
+        TSVectorType('repo_name', 'description', 'readme', 'topics', 
+                    weights={'repo_name': 'A', 'description': 'B', 'readme': 'C', 'topics': 'D'}))
+
+    def __repr__(self):
+        template = '<GitHub(id="{0}", name="{1}")>'
+        return template.format(self.id, self.full_name)
