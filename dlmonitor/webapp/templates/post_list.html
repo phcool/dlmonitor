@@ -2,61 +2,72 @@
 <div class="post">
     <div class="title">
         {% if post.html_url %}
-            <a href="{{ post.html_url }}" target="_blank">{{ post.repo_name }}</a>
+            <a href="{{ post.html_url }}" target="_blank">{{ post.repo_name }} <i class="fas fa-external-link-alt fa-xs"></i></a>
         {% else %}
-            <a href="{{ post.arxiv_url if post.arxiv_url else post.article_url }}" target="_blank">{{ post.title }}</a>
+            <a href="{{ post.arxiv_url if post.arxiv_url else post.article_url }}" target="_blank">{{ post.title }} <i class="fas fa-external-link-alt fa-xs"></i></a>
         {% endif %}
     </div>
     <div class="author">
-        {% if post.full_name %}
-            {{ post.full_name }}
-        {% else %}
-            {{ post.authors }}
-        {% endif %}
+        <i class="fas fa-user-edit fa-sm"></i> {{ post.full_name if post.full_name else post.authors }}
     </div>
     {% if post.description %}
     <div class="abstract">{{ post.description }}</div>
     {% endif %}
     <div class="tools clearfix">
         <span class="btns">
-            {% if post.updated_at %}
-                <span class="label label-default">{{ post.updated_at.strftime('%Y-%m-%d') }}</span>
+            <!-- 日期标签 -->
+            {% if post.html_url %}
+                <!-- GitHub 仓库显示创建时间和更新时间 -->
+                <span class="label label-default">
+                    <i class="far fa-calendar-plus"></i> Created: {{ post.created_at.strftime('%Y-%m-%d') }}
+                </span>
+                <span class="label label-default">
+                    <i class="far fa-calendar-check"></i> Updated: {{ post.updated_at.strftime('%Y-%m-%d') }}
+                </span>
             {% else %}
-                <span class="label label-default">{{ post.published_time.strftime('%Y-%m-%d') }}</span>
+                <!-- 其他内容显示单一日期 -->
+                <span class="label label-default">
+                    <i class="far fa-calendar-alt"></i> {{ (post.updated_at if post.updated_at else post.published_time).strftime('%Y-%m-%d') }}
+                </span>
             {% endif %}
             
-            {% if post.language %}
-                <span class="label label-info">{{ post.language }}</span>
-            {% elif post.journal %}
-                <span class="label label-info">{{ post.journal }}</span>
+            <!-- 类型标签 -->
+            {% if post.language or post.journal %}
+                <span class="label label-info">
+                    {% if post.language %}
+                        <i class="fas fa-code"></i> {{ post.language }}
+                    {% else %}
+                        <i class="fas fa-book"></i> {{ post.journal }}
+                    {% endif %}
+                </span>
             {% endif %}
             
-            {% if post.clone_url %}
-                <button type="button" class="btn btn-info" onclick="navigator.clipboard.writeText('{{ post.clone_url }}'); $.notify('Clone URL copied!', 'success');">Clone</button>
-            {% elif post.pdf_url %}
-                <button type="button" class="btn btn-info" onclick="window.open('{{ post.pdf_url }}', '_blank');">PDF</button>
-            {% elif post.doi %}
-                <button type="button" class="btn btn-info" onclick="window.open('https://www.nature.com/articles/{{ post.doi.split('/')[-1] }}.pdf', '_blank');">PDF</button>
-            {% endif %}
-            
+            <!-- 热度标签 -->
             {% if post.stars %}
-                {% if post.stars > 1000 %}
-                    <span class="label label-hot">⭐ {{ '%d' % (post.stars / 1000) }}k+</span>
-                {% elif post.stars > 100 %}
-                    <span class="label label-hot">⭐ {{ post.stars }}</span>
-                {% endif %}
+                <span class="label label-hot">
+                    <i class="fas fa-star"></i> {% if post.stars > 1000 %}{{ '%d' % (post.stars / 1000) }}k+{% else %}{{ post.stars }}{% endif %}
+                </span>
             {% elif post.popularity > 50 %}
-                <span class="label label-hot">Super Hot</span>
+                <span class="label label-hot"><i class="fas fa-fire"></i> Super Hot</span>
             {% elif post.popularity > 3 %}
-                <span class="label label-hot">Hot</span>
+                <span class="label label-hot"><i class="fas fa-fire"></i> Hot</span>
             {% endif %}
             
+            <!-- ID标签 -->
             {% if post.topics %}
-                <span class="label label-primary">{{ post.topics.split(',')[0] }}</span>
+                <span class="label label-primary"><i class="fas fa-tag"></i> {{ post.topics.split(',')[0] }}</span>
             {% elif post.arxiv_id %}
-                <span class="label label-primary">arXiv: {{ post.arxiv_id }}</span>
+                <span class="label label-primary"><i class="fas fa-scroll"></i> {{ post.arxiv_id }}</span>
             {% elif post.doi %}
-                <span class="label label-primary">DOI: {{ post.doi }}</span>
+                <span class="label label-primary"><i class="fas fa-id-card"></i> {{ post.doi }}</span>
+            {% endif %}
+            
+            <!-- 操作按钮 -->
+            {% set pdf_url = post.pdf_url or ('https://www.nature.com/articles/' + post.doi.split('/')[-1] + '.pdf' if post.doi else none) %}
+            {% if post.clone_url %}
+                <button type="button" class="btn btn-info" onclick="navigator.clipboard.writeText('{{ post.clone_url }}'); $.notify('Clone URL copied!', 'success');"><i class="fas fa-copy"></i> Clone</button>
+            {% elif pdf_url %}
+                <button type="button" class="btn btn-info" onclick="window.open('{{ pdf_url }}', '_blank');"><i class="fas fa-file-pdf"></i> PDF</button>
             {% endif %}
         </span>
     </div>

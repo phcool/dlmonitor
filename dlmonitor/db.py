@@ -4,7 +4,7 @@ from contextlib import contextmanager
 
 
 from . import settings
-from .db_models import Base, ArxivModel, TwitterModel, NatureModel
+from .db_models import Base, ArxivModel, NatureModel, GitHubModel
 
 def create_engine(**kwargs):
     return sqlalchemy.create_engine(settings.DATABASE_URL, **kwargs)

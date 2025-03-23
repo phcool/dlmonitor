@@ -16,6 +16,7 @@ import concurrent.futures
 from queue import Queue
 from tqdm import tqdm
 import feedparser
+from dlmonitor.settings import DEFAULT_MODEL
 
 class NatureSource(PaperSource):
     """
@@ -192,7 +193,7 @@ class NatureSource(PaperSource):
         
         # 使用提供的模型或加载新模型
         if model is None:
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            model = SentenceTransformer(DEFAULT_MODEL)
             
         # 如果没有指定最大论文数，使用类默认值
         if max_papers is None:

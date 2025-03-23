@@ -11,6 +11,7 @@ import arxiv
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from pgvector.sqlalchemy import Vector
+from dlmonitor.settings import DEFAULT_MODEL
 
 SEARCH_KEY = "cat:cs.CV+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL+OR+cat:cs.NE+OR+cat:stat.ML"
 
@@ -134,7 +135,7 @@ class ArxivSource(PaperSource):
         
         # 使用提供的模型或加载新模型
         if model is None:
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            model = SentenceTransformer(DEFAULT_MODEL)
             
         # 如果没有指定最大论文数，使用类默认值
         if max_papers is None:

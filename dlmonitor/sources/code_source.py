@@ -6,6 +6,7 @@ import numpy as np
 from datetime import datetime
 import time
 from sentence_transformers import SentenceTransformer
+from dlmonitor.settings import DEFAULT_MODEL
 
 class CodeSource(Source):
     """Base class for code repository sources"""
@@ -116,7 +117,7 @@ class CodeSource(Source):
                 pass
             return False
     
-    def get_posts(self, keywords=None, since=None, start=0, num=20, model=None):
+    def get_posts(self, keywords=None, since=None, start=0, num=20, model=None, sort_type="time"):
         """
         Get code repositories matching search criteria.
         
@@ -126,6 +127,7 @@ class CodeSource(Source):
             start (int): Start index for pagination
             num (int): Number of posts to return
             model: Optional pre-loaded model for embeddings
+            sort_type (str): Sorting method to use ("time", "relevance", "popularity")
             
         Returns:
             list: List of repository objects
@@ -141,63 +143,105 @@ class CodeSource(Source):
         session = get_global_session()
         query = session.query(model_class)
         
-        # 确定使用哪个日期字段
-        date_field = getattr(model_class, 'updated_at', None)
-        if date_field is None:
-            date_field = getattr(model_class, 'published_time', None)
-        
-        if since and date_field is not None:
-            # Filter date
-            assert isinstance(since, str)
-            query = query.filter(date_field >= since)
-        
-        # Perform keyword search if provided
-        if keywords and keywords.strip():
-            # Try vector search if available
-            results = self._search_by_vector(session, model_class, keywords, start, num, model)
+        # 首先处理时间过滤 - 总是使用updated_at字段进行过滤
+        filter_date_field = None
+        if hasattr(model_class, 'updated_at'):
+            filter_date_field = model_class.updated_at
+        elif hasattr(model_class, 'published_time'):
+            filter_date_field = model_class.published_time
             
-            # Fall back to traditional search if vector search is not available
-            if not results:
-                # Text search based on available fields
-                from sqlalchemy import or_
-                search_terms = keywords.split()
-                filters = []
-                
-                searchable_fields = []
-                
-                # 动态确定可搜索字段
-                for field_name in ['repo_name', 'description', 'readme', 'title', 'abstract', 'full_name', 'topics']:
-                    if hasattr(model_class, field_name):
-                        searchable_fields.append(getattr(model_class, field_name))
+        if since and filter_date_field is not None:
+            # 使用updated_at字段过滤日期
+            assert isinstance(since, str)
+            query = query.filter(filter_date_field >= since)
+        
+        # 识别排序字段 - 这些用于后续排序
+        sort_date_field = None
+        if sort_type == "time" and hasattr(model_class, 'created_at'):
+            # 对于GitHub仓库，时间排序使用created_at
+            sort_date_field = 'created_at'
+        elif hasattr(model_class, 'updated_at'):
+            sort_date_field = 'updated_at'
+        elif hasattr(model_class, 'published_time'):
+            sort_date_field = 'published_time'
+            
+        # 识别热度字段
+        popularity_field = None
+        if hasattr(model_class, 'stars'):
+            popularity_field = 'stars'
+        elif hasattr(model_class, 'popularity'):
+            popularity_field = 'popularity'
+        
+        # 如果有关键词，首先尝试使用向量搜索
+        if keywords and keywords.strip():
+            vector_results = None
+            if hasattr(model_class, 'embedding'):
+                try:
+                    # 获取更多结果用于排序 (num*3)
+                    vector_results = self._search_by_vector(session, model_class, keywords, 0, num * 3, model, date_filtered_query=query)
+                    self.logger.info(f"向量搜索返回 {len(vector_results) if vector_results else 0} 条结果")
+                except Exception as e:
+                    self.logger.error(f"向量搜索失败: {str(e)}")
                     
-                for term in search_terms:
-                    term_filters = []
-                    for field in searchable_fields:
-                        term_filters.append(field.ilike(f'%{term}%'))
-                    if term_filters:
-                        filters.append(or_(*term_filters))
-                
-                if filters:
-                    if date_field is not None:
-                        results = (query.filter(*filters)
-                                 .order_by(desc(date_field))
-                                 .offset(start).limit(num).all())
-                    else:
-                        results = (query.filter(*filters)
-                                 .offset(start).limit(num).all())
+            if vector_results:
+                # 根据排序类型对向量搜索结果重新排序
+                if sort_type == "time" and sort_date_field:
+                    # 按时间排序
+                    sorted_results = sorted(vector_results, key=lambda x: getattr(x, sort_date_field, ''), reverse=True)
+                    self.logger.info(f"向量搜索结果已按{sort_date_field}排序")
+                    return sorted_results[start:start+num]
+                elif sort_type == "popularity" and popularity_field:
+                    # 按热度排序
+                    sorted_results = sorted(vector_results, key=lambda x: getattr(x, popularity_field, 0), reverse=True)
+                    self.logger.info(f"向量搜索结果已按{popularity_field}排序")
+                    return sorted_results[start:start+num]
                 else:
-                    results = []
-        else:
-            # Return recent repositories if no search keywords
-            if date_field is not None:
-                results = (query.order_by(desc(date_field))
-                          .offset(start).limit(num).all())
-            else:
-                results = query.offset(start).limit(num).all()
+                    # 默认情况下，保持向量搜索的相关性排序
+                    self.logger.info("返回按相关性排序的向量搜索结果")
+                    return vector_results[start:start+num]
+            
+            # 如果向量搜索不可用或失败，回退到传统关键词搜索
+            self.logger.info("回退到关键词搜索")
+            from sqlalchemy import or_
+            search_terms = keywords.split()
+            filters = []
+            
+            searchable_fields = []
+            
+            # 动态确定可搜索字段
+            for field_name in ['repo_name', 'description', 'readme', 'title', 'abstract', 'full_name', 'topics']:
+                if hasattr(model_class, field_name):
+                    searchable_fields.append(getattr(model_class, field_name))
+                
+            for term in search_terms:
+                term_filters = []
+                for field in searchable_fields:
+                    term_filters.append(field.ilike(f'%{term}%'))
+                if term_filters:
+                    filters.append(or_(*term_filters))
+            
+            if filters:
+                query = query.filter(*filters)
+        
+        # 对关键词搜索结果应用排序
+        if sort_type == "time":
+            # 按时间排序
+            if sort_date_field and hasattr(model_class, sort_date_field):
+                query = query.order_by(desc(getattr(model_class, sort_date_field)))
+        elif sort_type == "popularity":
+            # 按热度排序
+            if popularity_field and hasattr(model_class, popularity_field):
+                query = query.order_by(desc(getattr(model_class, popularity_field)))
+            elif sort_date_field and hasattr(model_class, sort_date_field):
+                # 如果没有热度字段，回退到时间排序
+                query = query.order_by(desc(getattr(model_class, sort_date_field)))
+        
+        # 应用分页并获取结果
+        results = query.offset(start).limit(num).all()
         
         return results
     
-    def _search_by_vector(self, session, model_class, keywords, start, num, model):
+    def _search_by_vector(self, session, model_class, keywords, start, num, model, date_filtered_query=None):
         """
         Search using vector embeddings if available.
         
@@ -208,6 +252,7 @@ class CodeSource(Source):
             start: Start index
             num: Number of results
             model: Optional pre-loaded model for embeddings
+            date_filtered_query: Optional pre-filtered query with date constraints
             
         Returns:
             list: Search results or empty list if vector search is not available
@@ -223,11 +268,14 @@ class CodeSource(Source):
         # Generate query embedding
         try:
             if model is None:
-                model = SentenceTransformer('all-MiniLM-L6-v2')
+                model = SentenceTransformer(DEFAULT_MODEL)
             query_embedding = model.encode(keywords).astype(np.float32)
             
+            # 使用已经过滤的查询（如果提供），否则创建新查询
+            base_query = date_filtered_query if date_filtered_query is not None else session.query(model_class)
+            
             # Use cosine distance method for vector search
-            results = (session.query(model_class)
+            results = (base_query
                       .filter(model_class.embedding != None)
                       .order_by(model_class.embedding.cosine_distance(query_embedding))
                       .offset(start).limit(num).all())

@@ -67,36 +67,6 @@ class NatureModel(Base):
         template = '<Nature(id="{0}", url="{1}")>'
         return template.format(self.id, self.article_url)
 
-class TwitterModel(Base):
-
-    __tablename__ = 'twitter'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    tweet_id = Column(String(20), primary_key=True)
-    popularity = Column(Integer)
-    pic_url = Column(String(255), nullable=True)
-    published_time = Column(DateTime())
-    user = Column(Unicode(255))
-    text = Column(Text())
-
-    # For full text search
-    search_vector = Column(TSVectorType('text'))
-
-    def __repr__(self):
-        template = '<Twitter(id="{0}", user_name="{1}")>'
-        return template.format(self.id, self.user)
-
-class WorkingQueueModel(Base):
-
-    __tablename__ = "working"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    type = Column(String(255), nullable=True)
-    param = Column(String(255), nullable=True)
-
-    def __repr__(self):
-        return __tablename__ + self.id
-
 class GitHubModel(Base):
 
     __tablename__ = 'github'

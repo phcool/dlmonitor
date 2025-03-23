@@ -4,6 +4,7 @@ Social media source base class for platforms like Twitter, Reddit, etc.
 from .base import Source
 import numpy as np
 from datetime import datetime
+from dlmonitor.settings import DEFAULT_MODEL
 
 class SocialMediaSource(Source):
     """Base class for social media sources"""
@@ -115,7 +116,7 @@ class SocialMediaSource(Source):
         try:
             from sentence_transformers import SentenceTransformer
             if model is None:
-                model = SentenceTransformer('all-MiniLM-L6-v2')
+                model = SentenceTransformer(DEFAULT_MODEL)
             query_embedding = model.encode(keywords).astype(np.float32)
             
             # Use cosine distance method for vector search

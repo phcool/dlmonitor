@@ -9,6 +9,7 @@ from ..db_models import GitHubModel
 import numpy as np
 import time
 import base64
+from dlmonitor.settings import DEFAULT_MODEL
 
 class GitSource(CodeSource):
     """GitHub source implementation"""
@@ -356,7 +357,7 @@ class GitSource(CodeSource):
         
         # 使用提供的模型或加载新模型
         if model is None:
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            model = SentenceTransformer(DEFAULT_MODEL)
             
         # 如果没有指定最大仓库数，使用类默认值
         if max_repos is None:

@@ -18,17 +18,8 @@ DATABASE_PASSWD = os.environ.get('DATABASE_PASSWD', "pass")
 DATABASE_URL = os.environ.get('DATABASE_URL', "postgresql://{}:{}@{}/{}".format(
     DATABASE_USER, DATABASE_PASSWD, DATABASE_ADDR, DATABASE_NAME))
 
-TWITTER_CONSUMER_KEY = os.environ.get('TWITTER_CONSUMER_KEY', "")
-TWITTER_CONSUMER_SECRET = os.environ.get('TWITTER_CONSUMER_SECRET', "")
-TWITTER_ACCESS_TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN', "")
-TWITTER_ACCESS_SECRET = os.environ.get('TWITTER_ACCESS_SECRET', "")
+DEFAULT_MODEL = os.environ.get('DEFAULT_MODEL', "all-MiniLM-L6-v2")
+NUMBER_EACH_PAGE = os.environ.get('NUMBER_EACH_PAGE', 100)
 
-PDF_PATH = os.environ.get("PDF_PATH", "/tmp")
-SOURCE_PATH = os.environ.get("SOURCE_PATH", "/tmp")
-HOME_URL = os.environ.get("HOME_URL", "https://deeplearn.org")
-
-
-MENDELEY_CLIENTID = os.environ.get("MENDELEY_CLIENTID", "")
-MENDELEY_SECRET = os.environ.get("MENDELEY_SECRET", "")
 
 SESSION_KEY = os.environ.get("SESSION_KEY", "DEEPLEARN.ORG SECRET KEY")
