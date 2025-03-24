@@ -23,7 +23,6 @@ class ArxivSource(PaperSource):
     def __init__(self):
         super(ArxivSource, self).__init__()
         self.source_name = "arxiv"
-
     def _get_version(self, arxiv_url):
         """Extract version number from arXiv URL"""
         version = 1
@@ -37,7 +36,7 @@ class ArxivSource(PaperSource):
         from ..db import ArxivModel
         return ArxivModel
 
-    def _process_batch(self, session, batch, model, existing_urls=None):
+    def _process_batch(self, session, batch, model):
         """
         处理论文批次并添加到数据库
         
@@ -53,9 +52,8 @@ class ArxivSource(PaperSource):
         from ..db import ArxivModel
         
         # 如果没有提供现有URL，则查询数据库
-        if existing_urls is None:
-            arxiv_urls = [paper.entry_id for paper in batch]
-            existing_urls = {url[0] for url in session.query(ArxivModel.arxiv_url).filter(ArxivModel.arxiv_url.in_(arxiv_urls)).all()}
+        arxiv_urls = [paper.entry_id for paper in batch]
+        existing_urls = {url[0] for url in session.query(ArxivModel.arxiv_url).filter(ArxivModel.arxiv_url.in_(arxiv_urls)).all()}
         
         # 准备新论文数据
         new_papers = []
@@ -117,7 +115,7 @@ class ArxivSource(PaperSource):
         
         return batch_new_count, papers_per_category
     
-    def _fetch(self, search_queries, max_papers=None, model=None, batch_size=32, stop_on_consecutive_empty=False):
+    def _fetch(self, search_queries, max_papers=None, model=None, batch_size=32, stop_on_consecutive_empty=False, time_limit=None):
         """
         通用论文获取函数，支持单个或多个搜索查询
         
@@ -137,7 +135,6 @@ class ArxivSource(PaperSource):
         if model is None:
             model = SentenceTransformer(DEFAULT_MODEL)
             
-        # 如果没有指定最大论文数，使用类默认值
         if max_papers is None:
             max_papers = self.MAX_PAPERS_PER_SOURCE
             
@@ -245,13 +242,12 @@ class ArxivSource(PaperSource):
         
         # 简单统计主要类别的论文数量
         main_cats = ["cs.CV", "cs.AI", "cs.LG", "cs.CL", "cs.NE", "stat.ML"]
-        main_cats_count = sum(all_categories_count.get(cat, 0) for cat in main_cats)
         
-        self.logger.info(f"arXiv论文获取完成。共获取{total_fetched}篇论文，其中新增{total_new}篇。机器学习及相关类别共{main_cats_count}篇。")
-        
+        self.logger.info(f"arXiv论文获取完成。共获取{total_fetched}篇论文，其中新增{total_new}篇。")
+        self.logger.info(f"cs.CV:{all_categories_count.get('cs.CV', 0)}, cs.AI:{all_categories_count.get('cs.AI', 0)}, cs.LG:{all_categories_count.get('cs.LG', 0)}, cs.CL:{all_categories_count.get('cs.CL', 0)}, cs.NE:{all_categories_count.get('cs.NE', 0)}, stat.ML:{all_categories_count.get('stat.ML', 0)}")        
         return total_new > 0
 
-    def fetch_new(self, model=None):
+    def fetch_new(self, max_papers=None, model=None):
         """
         获取最近一天内的arXiv论文并存储到数据库。
         
@@ -263,7 +259,7 @@ class ArxivSource(PaperSource):
         """
         # 获取当前日期和昨天日期
         today = datetime.now()
-        yesterday = today - timedelta(days=1)
+        yesterday = today - timedelta(days=7)
         
         # 格式化日期为arXiv查询格式 YYYYMMDD
         today_str = today.strftime("%Y%m%d")
@@ -284,13 +280,13 @@ class ArxivSource(PaperSource):
         # 调用通用获取函数，不使用连续空批次停止，确保获取所有新论文
         return self._fetch(
             search_query, 
-            max_papers=self.MAX_PAPERS_PER_SOURCE,
+            max_papers=max_papers,
             model=model,
             batch_size=32,
             stop_on_consecutive_empty=False  # 确保获取所有符合条件的论文
         )
 
-    def fetch_all(self, model=None):
+    def fetch_all(self,max_papers=None, model=None):
         """
         一次性获取大量arXiv论文，用于初始填充数据库。
         
@@ -302,7 +298,8 @@ class ArxivSource(PaperSource):
         """
         # 保存并设置更高的最大论文数
         original_max = self.MAX_PAPERS_PER_SOURCE
-        max_papers = 100000  # 10万篇论文
+        if max_papers is None:
+            max_papers = 10000  # 1万篇论文
         
         self.logger.info(f"开始从arXiv大量获取论文... (最大获取量: {max_papers}篇)")
         
@@ -326,7 +323,7 @@ class ArxivSource(PaperSource):
         for category in categories:
             for start_date, end_date in year_ranges:
                 # 创建带有日期范围的查询字符串
-                date_query = f"cat:{category} AND submittedDate:[{start_date}0000 TO {end_date}1000]"
+                date_query = f"cat:{category} AND submittedDate:[{start_date}0000 TO {end_date}2359]"
                 # 按提交日期排序
                 search_queries.append((date_query, arxiv.SortCriterion.SubmittedDate))
         

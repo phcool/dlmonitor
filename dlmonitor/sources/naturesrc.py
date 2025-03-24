@@ -194,8 +194,7 @@ class NatureSource(PaperSource):
         # 使用提供的模型或加载新模型
         if model is None:
             model = SentenceTransformer(DEFAULT_MODEL)
-            
-        # 如果没有指定最大论文数，使用类默认值
+
         if max_papers is None:
             max_papers = self.MAX_PAPERS_PER_SOURCE
             
@@ -360,7 +359,7 @@ class NatureSource(PaperSource):
         
         return total_new > 0
 
-    def fetch_new(self, model=None):
+    def fetch_new(self, max_papers=None, model=None):
         """
         获取最近一天内的Nature论文并存储到数据库。
         
@@ -392,7 +391,7 @@ class NatureSource(PaperSource):
             time_limit=one_week_ago  # 添加时间限制
         )
 
-    def fetch_all(self, model=None):
+    def fetch_all(self,max_papers=None,model=None):
         """
         一次性获取大量Nature论文，用于初始填充数据库。
         

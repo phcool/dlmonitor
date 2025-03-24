@@ -10,11 +10,11 @@ class PaperSource(Source):
     """Base class for academic paper sources"""
     
     # Default parameters for paper sources
-    MAX_PAPERS_PER_SOURCE = 1000  # Maximum number of papers to fetch per source
     
     def __init__(self):
         super(PaperSource, self).__init__()
         self.source_type = Source.SOURCE_TYPE_PAPER
+        self.MAX_PAPERS_PER_SOURCE = 1000  # Maximum number of papers to fetch per source
     
     def get_one_post(self, paper_id):
         """

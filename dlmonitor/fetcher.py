@@ -73,8 +73,17 @@ def fetch_sources(src, model=None, max_papers=None, fetch_all=False):
         from sentence_transformers import SentenceTransformer
         model = SentenceTransformer(DEFAULT_MODEL)
 
-    if src not in ['arxiv', 'nature', 'github', 'all']:
+    if src not in ['arxiv', 'nature', 'github']:
         raise ValueError(f"Invalid source: {src}")
+    
+    source=get_source(src)
+    if fetch_all:
+        return source.fetch_all(model=model,max_papers=max_papers)
+    else:
+        return source.fetch_new(model=model, max_papers=max_papers)
+
+    
+
     
 
     

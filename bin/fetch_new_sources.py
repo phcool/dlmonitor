@@ -3,10 +3,11 @@ import time
 import logging
 from argparse import ArgumentParser
 from sentence_transformers import SentenceTransformer
-from settings import DEFAULT_MODEL
-sys.path.append(".")
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
 from dlmonitor.fetcher import fetch_sources
-
+from dlmonitor.settings import DEFAULT_MODEL
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -48,7 +49,7 @@ def run_fetch(src_name, max_papers=None, fetch_all=False):
 
 if __name__ == '__main__':
     ap = ArgumentParser(description="获取新的论文、代码仓库和推文")
-    ap.add_argument("--src", help="来源名称: arxiv, nature, github, twitter, all")
+    ap.add_argument("--src", help="来源名称: arxiv, nature, github,  all")
     ap.add_argument("--forever", action="store_true", help="持续运行，每10分钟执行一次")
     ap.add_argument("--interval", type=int, default=600, help="循环执行的间隔时间（秒），默认600秒（10分钟）")
     ap.add_argument("--max_papers", type=int, help="每个来源最多获取的内容总数")
