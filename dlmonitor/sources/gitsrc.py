@@ -497,9 +497,28 @@ class GitSource(CodeSource):
         # 计算一周前的日期
         one_week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
         
-        # 获取最近一周更新的仓库
+        # 获取最近一周更新的仓库，使用更全面的搜索策略
         search_queries = [
-            (f"language:python stars:>100 pushed:>{one_week_ago}", "updated", "desc")
+            # 计算机科学总类
+            (f"topic:computer-science stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 人工智能和机器学习
+            (f"(topic:artificial-intelligence OR topic:ai OR topic:ml OR topic:machine-learning) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 深度学习和大模型
+            (f"(topic:deep-learning OR topic:llm OR topic:large-language-model) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 计算机视觉
+            (f"(topic:computer-vision OR topic:cv OR topic:image-processing) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 自然语言处理
+            (f"(topic:nlp OR topic:natural-language-processing) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 机器人
+            (f"(topic:robotics OR topic:robot OR topic:automation) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 软件工程
+            (f"(topic:software-engineering OR topic:devops OR topic:ci-cd) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 分布式系统
+            (f"(topic:distributed-systems OR topic:cloud OR topic:microservices) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 量子计算
+            (f"(topic:quantum-computing OR topic:quantum) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
+            # 数据科学
+            (f"(topic:data-science OR topic:big-data OR topic:analytics) stars:>100 pushed:>{one_week_ago}", "updated", "desc")
         ]
         return self._fetch(search_queries, model=model)
     
@@ -517,25 +536,28 @@ class GitSource(CodeSource):
         one_month_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # 获取最近一个月更新的仓库，使用不同的查询策略获取多样化的结果
+        # 获取最近一个月更新的仓库，使用更全面的搜索策略
         search_queries = [
-            # 按星标数排序的热门 Python 仓库
-            (f"language:python stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            
-            # 机器学习相关的仓库
-            (f"topic:machine-learning language:python pushed:{one_month_ago}..{today}", "stars", "desc"),
-            
-            # 深度学习相关的仓库
-            (f"topic:deep-learning language:python pushed:{one_month_ago}..{today}", "stars", "desc"),
-            
-            # 大语言模型相关的仓库
-            (f"topic:llm language:python pushed:{one_month_ago}..{today}", "stars", "desc"),
-            
-            # 人工智能相关的仓库
-            (f"topic:artificial-intelligence language:python pushed:{one_month_ago}..{today}", "stars", "desc"),
-            
-            # 数据科学相关的仓库
-            (f"topic:data-science language:python pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 计算机科学总类
+            (f"topic:computer-science stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 人工智能和机器学习
+            (f"(topic:artificial-intelligence OR topic:ai OR topic:ml OR topic:machine-learning) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 深度学习和大模型
+            (f"(topic:deep-learning OR topic:llm OR topic:large-language-model) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 计算机视觉
+            (f"(topic:computer-vision OR topic:cv OR topic:image-processing) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 自然语言处理
+            (f"(topic:nlp OR topic:natural-language-processing) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 机器人
+            (f"(topic:robotics OR topic:robot OR topic:automation) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 软件工程
+            (f"(topic:software-engineering OR topic:devops OR topic:ci-cd) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 分布式系统
+            (f"(topic:distributed-systems OR topic:cloud OR topic:microservices) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 量子计算
+            (f"(topic:quantum-computing OR topic:quantum) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
+            # 数据科学
+            (f"(topic:data-science OR topic:big-data OR topic:analytics) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc")
         ]
         
         # 指定 fetch_all 获取更多仓库，每个查询获取更多结果

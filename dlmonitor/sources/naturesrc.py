@@ -48,14 +48,31 @@ class NatureSource(PaperSource):
                     "https://www.nature.com/natcomputsci/articles?type=review"
                 ]
             },
-            # Nature主刊 - AI/ML相关
+            # Nature主刊 - 所有计算机科学相关
             {
                 "name": "Nature",
                 "urls": [
+                    # 计算机科学总类
                     "https://www.nature.com/nature/articles?type=article&subject=computer-science",
+                    # AI/ML相关
                     "https://www.nature.com/nature/articles?type=article&subject=artificial-intelligence",
                     "https://www.nature.com/nature/articles?type=article&subject=machine-learning",
-                    "https://www.nature.com/search?subject=artificial-intelligence&journal=nature"
+                    # 机器人和自动化
+                    "https://www.nature.com/nature/articles?type=article&subject=robotics",
+                    "https://www.nature.com/nature/articles?type=article&subject=automation",
+                    # 计算机视觉和图形学
+                    "https://www.nature.com/nature/articles?type=article&subject=computer-vision",
+                    "https://www.nature.com/nature/articles?type=article&subject=graphics",
+                    # 自然语言处理
+                    "https://www.nature.com/nature/articles?type=article&subject=natural-language-processing",
+                    # 人机交互
+                    "https://www.nature.com/nature/articles?type=article&subject=human-computer-interaction",
+                    # 软件工程
+                    "https://www.nature.com/nature/articles?type=article&subject=software-engineering",
+                    # 分布式系统
+                    "https://www.nature.com/nature/articles?type=article&subject=distributed-computing",
+                    # 量子计算
+                    "https://www.nature.com/nature/articles?type=article&subject=quantum-computing"
                 ]
             }
         ]
@@ -74,14 +91,26 @@ class NatureSource(PaperSource):
                 "name": "Nature",
                 "url": "https://www.nature.com/nature.rss"
             },
-            # 添加AI/ML相关主题的RSS
+            # 添加所有计算机科学相关的RSS
             {
-                "name": "Nature AI/ML Articles",
+                "name": "Nature Computer Science",
+                "url": "https://www.nature.com/search.rss?subject=computer-science"
+            },
+            {
+                "name": "Nature AI/ML",
                 "url": "https://www.nature.com/search.rss?subject=artificial-intelligence"
             },
             {
-                "name": "Nature Computer Science Articles",
-                "url": "https://www.nature.com/search.rss?subject=computer-science"
+                "name": "Nature Robotics",
+                "url": "https://www.nature.com/search.rss?subject=robotics"
+            },
+            {
+                "name": "Nature NLP",
+                "url": "https://www.nature.com/search.rss?subject=natural-language-processing"
+            },
+            {
+                "name": "Nature HCI",
+                "url": "https://www.nature.com/search.rss?subject=human-computer-interaction"
             }
         ]
         

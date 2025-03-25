@@ -13,7 +13,7 @@ import numpy as np
 from pgvector.sqlalchemy import Vector
 from dlmonitor.settings import DEFAULT_MODEL
 
-SEARCH_KEY = "cat:cs.CV+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL+OR+cat:cs.NE+OR+cat:stat.ML"
+SEARCH_KEY = "cat:cs+OR+cat:stat.ML"
 
 class ArxivSource(PaperSource):
     """
