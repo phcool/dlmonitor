@@ -10,8 +10,15 @@
     <div class="author">
         <i class="fas fa-user-edit fa-sm"></i> {{ post.full_name if post.full_name else post.authors }}
     </div>
-    {% if post.description %}
-    <div class="abstract">{{ post.description }}</div>
+    {% set abstract = post.abstract if post.abstract is defined else post.description %}
+    {% if abstract %}
+    <div class="abstract-container">
+        <div class="abstract-preview">{{ abstract[:200] }}{% if abstract|length > 200 %}...{% endif %}</div>
+        <div class="abstract-full" style="display: none;">{{ abstract }}</div>
+        <button class="btn btn-link btn-sm toggle-abstract" onclick="toggleAbstract(this)">
+            <i class="fas fa-chevron-down"></i> 展开摘要
+        </button>
+    </div>
     {% endif %}
     <div class="tools clearfix">
         <span class="btns">
@@ -73,4 +80,66 @@
     </div>
 </div>
 <div class="hrline"></div>
-{% endfor %} 
+{% endfor %}
+
+<style>
+.abstract-container {
+    margin: 10px 0;
+    position: relative;
+}
+
+.abstract-preview {
+    color: #666;
+    line-height: 1.5;
+    margin-bottom: 5px;
+}
+
+.abstract-full {
+    color: #666;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.toggle-abstract {
+    padding: 0;
+    margin: 0;
+    color: #007bff;
+    text-decoration: none;
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+.toggle-abstract:hover {
+    color: #0056b3;
+    text-decoration: none;
+}
+
+.toggle-abstract i {
+    transition: transform 0.3s ease;
+}
+
+.toggle-abstract.expanded i {
+    transform: rotate(180deg);
+}
+</style>
+
+<script>
+function toggleAbstract(button) {
+    const container = button.closest('.abstract-container');
+    const preview = container.querySelector('.abstract-preview');
+    const full = container.querySelector('.abstract-full');
+    
+    if (full.style.display === 'none') {
+        preview.style.display = 'none';
+        full.style.display = 'block';
+        button.innerHTML = '<i class="fas fa-chevron-up"></i> 收起摘要';
+        button.classList.add('expanded');
+    } else {
+        preview.style.display = 'block';
+        full.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-chevron-down"></i> 展开摘要';
+        button.classList.remove('expanded');
+    }
+}
+</script> 

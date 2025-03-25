@@ -115,13 +115,13 @@ class ArxivSource(PaperSource):
         
         return batch_new_count, papers_per_category
     
-    def _fetch(self, search_queries, max_papers=None, model=None, batch_size=32, stop_on_consecutive_empty=False, time_limit=None):
+    def _fetch(self, search_queries, max_nums=None, model=None, batch_size=32, stop_on_consecutive_empty=False, time_limit=None):
         """
         通用论文获取函数，支持单个或多个搜索查询
         
         Args:
             search_queries: 单个查询或查询生成器，每个查询为(query_string, sort_by)元组
-            max_papers: 最大获取论文数量
+            max_nums: 最大获取论文数量
             model: 预加载的SentenceTransformer模型
             batch_size: 处理的批次大小
             stop_on_consecutive_empty: 是否在连续空批次后停止
@@ -135,8 +135,8 @@ class ArxivSource(PaperSource):
         if model is None:
             model = SentenceTransformer(DEFAULT_MODEL)
             
-        if max_papers is None:
-            max_papers = self.MAX_PAPERS_PER_SOURCE
+        if max_nums is None:
+            max_nums = self.MAX_PAPERS_PER_SOURCE
             
         # 确保search_queries是可迭代的
         if not hasattr(search_queries, '__iter__') or isinstance(search_queries, tuple):
@@ -161,7 +161,7 @@ class ArxivSource(PaperSource):
             # 创建搜索查询
             search_query = arxiv.Search(
                 query=query_string,
-                max_results=min(max_papers, 2000),  # arXiv API限制
+                max_results=min(max_nums, 2000),  # arXiv API限制
                 sort_by=sort_criterion
             )
             
@@ -181,7 +181,7 @@ class ArxivSource(PaperSource):
                     query_total += 1
                     
                     # 达到批次大小或已处理所有结果
-                    if len(batch) >= batch_size or total_fetched >= max_papers:
+                    if len(batch) >= batch_size or total_fetched >= max_nums:
                         with session_scope() as session:
                             # 处理批次
                             batch_new, batch_categories = self._process_batch(session, batch, model)
@@ -200,7 +200,7 @@ class ArxivSource(PaperSource):
                         batch = []
                         
                         # 停止条件
-                        if total_fetched >= max_papers:
+                        if total_fetched >= max_nums:
                             break
                         
                         if stop_on_consecutive_empty and query_total >= 100 and consecutive_empty_batches >= 3:
@@ -247,7 +247,7 @@ class ArxivSource(PaperSource):
         self.logger.info(f"cs.CV:{all_categories_count.get('cs.CV', 0)}, cs.AI:{all_categories_count.get('cs.AI', 0)}, cs.LG:{all_categories_count.get('cs.LG', 0)}, cs.CL:{all_categories_count.get('cs.CL', 0)}, cs.NE:{all_categories_count.get('cs.NE', 0)}, stat.ML:{all_categories_count.get('stat.ML', 0)}")        
         return total_new > 0
 
-    def fetch_new(self, max_papers=None, model=None):
+    def fetch_new(self, max_nums=None, model=None):
         """
         获取最近一天内的arXiv论文并存储到数据库。
         
@@ -280,13 +280,13 @@ class ArxivSource(PaperSource):
         # 调用通用获取函数，不使用连续空批次停止，确保获取所有新论文
         return self._fetch(
             search_query, 
-            max_papers=max_papers,
+            max_nums=max_nums,
             model=model,
             batch_size=32,
             stop_on_consecutive_empty=False  # 确保获取所有符合条件的论文
         )
 
-    def fetch_all(self,max_papers=None, model=None):
+    def fetch_all(self,max_nums=None, model=None):
         """
         一次性获取大量arXiv论文，用于初始填充数据库。
         
@@ -298,10 +298,10 @@ class ArxivSource(PaperSource):
         """
         # 保存并设置更高的最大论文数
         original_max = self.MAX_PAPERS_PER_SOURCE
-        if max_papers is None:
-            max_papers = 10000  # 1万篇论文
+        if max_nums is None:
+            max_nums = 10000  # 1万篇论文
         
-        self.logger.info(f"开始从arXiv大量获取论文... (最大获取量: {max_papers}篇)")
+        self.logger.info(f"开始从arXiv大量获取论文... (最大获取量: {max_nums}篇)")
         
         # 创建多个搜索查询，基于类别和时间范围
         categories = ["cs.CV", "cs.AI", "cs.LG", "cs.CL", "cs.NE", "stat.ML"]
@@ -330,7 +330,7 @@ class ArxivSource(PaperSource):
         # 调用通用获取函数，不设置连续空批次停止
         result = self._fetch(
             search_queries, 
-            max_papers=max_papers,
+            max_nums=max_nums,
             model=model,
             batch_size=100,
             stop_on_consecutive_empty=False

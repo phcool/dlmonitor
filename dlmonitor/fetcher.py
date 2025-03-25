@@ -63,7 +63,7 @@ def get_posts(src, keywords, since=None, start=0, num=NUMBER_EACH_PAGE, sort_typ
         logger.error(f"Error fetching data from {src}: {str(e)}", exc_info=True)
         raise
 
-def fetch_sources(src, model=None, max_papers=None, fetch_all=False):
+def fetch_sources(src, model=None, max_nums=None, fetch_all=False):
     """执行获取新论文的操作"""
     logger.info(f"开始获取 {src} 的新内容...")
     
@@ -75,12 +75,11 @@ def fetch_sources(src, model=None, max_papers=None, fetch_all=False):
 
     if src not in ['arxiv', 'nature', 'github']:
         raise ValueError(f"Invalid source: {src}")
-    
     source=get_source(src)
     if fetch_all:
-        return source.fetch_all(model=model,max_papers=max_papers)
+        return source.fetch_all(model=model,max_nums=max_nums)
     else:
-        return source.fetch_new(model=model, max_papers=max_papers)
+        return source.fetch_new(model=model, max_nums=max_nums)
 
     
 

@@ -173,13 +173,13 @@ class NatureSource(PaperSource):
         
         return batch_new_count, papers_per_journal
     
-    def _fetch(self, search_queries, max_papers=None, model=None, batch_size=32, stop_on_consecutive_empty=False, time_limit=None):
+    def _fetch(self, search_queries, max_nums=None, model=None, batch_size=32, stop_on_consecutive_empty=False, time_limit=None):
         """
         通用论文获取函数，支持单个或多个搜索查询
         
         Args:
             search_queries: 单个查询或查询生成器，每个查询为(query_string, sort_by)元组
-            max_papers: 最大获取论文数量
+            max_nums: 最大获取论文数量
             model: 预加载的SentenceTransformer模型
             batch_size: 处理的批次大小
             stop_on_consecutive_empty: 是否在连续空批次后停止
@@ -195,8 +195,8 @@ class NatureSource(PaperSource):
         if model is None:
             model = SentenceTransformer(DEFAULT_MODEL)
 
-        if max_papers is None:
-            max_papers = self.MAX_PAPERS_PER_SOURCE
+        if max_nums is None:
+            max_nums = self.MAX_PAPERS_PER_SOURCE
             
         # 确保search_queries是可迭代的
         if not hasattr(search_queries, '__iter__') or isinstance(search_queries, tuple):
@@ -310,7 +310,7 @@ class NatureSource(PaperSource):
                         query_total += 1
                     
                     # 达到批次大小或已处理所有结果
-                    if len(batch) >= batch_size or total_fetched >= max_papers:
+                    if len(batch) >= batch_size or total_fetched >= max_nums:
                         with session_scope() as session:
                             # 处理批次
                             batch_new, batch_journals = self._process_batch(session, batch, model)
@@ -329,7 +329,7 @@ class NatureSource(PaperSource):
                         batch = []
                         
                         # 停止条件
-                        if total_fetched >= max_papers:
+                        if total_fetched >= max_nums:
                             break
                         
                         if stop_on_consecutive_empty and query_total >= 100 and consecutive_empty_batches >= 3:
@@ -359,7 +359,7 @@ class NatureSource(PaperSource):
         
         return total_new > 0
 
-    def fetch_new(self, max_papers=None, model=None):
+    def fetch_new(self, max_nums=None, model=None):
         """
         获取最近一天内的Nature论文并存储到数据库。
         
@@ -384,14 +384,14 @@ class NatureSource(PaperSource):
         # 调用通用获取函数，不使用连续空批次停止，确保获取所有新论文
         return self._fetch(
             search_queries, 
-            max_papers=self.MAX_PAPERS_PER_SOURCE,
+            max_nums=self.MAX_PAPERS_PER_SOURCE,
             model=model,
             batch_size=32,
             stop_on_consecutive_empty=False,  # 确保获取所有符合条件的论文
             time_limit=one_week_ago  # 添加时间限制
         )
 
-    def fetch_all(self,max_papers=None,model=None):
+    def fetch_all(self,max_nums=None,model=None):
         """
         一次性获取大量Nature论文，用于初始填充数据库。
         
@@ -403,9 +403,9 @@ class NatureSource(PaperSource):
         """
         # 保存并设置更高的最大论文数
         original_max = self.MAX_PAPERS_PER_SOURCE
-        max_papers = 100000  # 10万篇论文
+        max_nums = 100000  # 10万篇论文
         
-        self.logger.info(f"开始从Nature大量获取论文... (最大获取量: {max_papers}篇)")
+        self.logger.info(f"开始从Nature大量获取论文... (最大获取量: {max_nums}篇)")
         
         # 创建多个搜索查询，基于期刊
         search_queries = []
@@ -415,7 +415,7 @@ class NatureSource(PaperSource):
         # 调用通用获取函数，不设置连续空批次停止
         result = self._fetch(
             search_queries, 
-            max_papers=max_papers,
+            max_nums=max_nums,
             model=model,
             batch_size=100,
             stop_on_consecutive_empty=False

@@ -484,7 +484,7 @@ class GitSource(CodeSource):
             self.logger.error(f"Failed to search repositories: {str(e)}")
             return []
     
-    def fetch_new(self, model=None):
+    def fetch_new(self, max_nums=None, model=None):
         """
         Fetch new repositories from GitHub (last week).
         
