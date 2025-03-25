@@ -14,7 +14,7 @@ class CodeSource(Source):
     def __init__(self):
         super(CodeSource, self).__init__()
         self.source_type = Source.SOURCE_TYPE_CODE
-        self.MAX_REPOS_PER_SOURCE = 100  # 默认最大获取数量
+        self.MAX_REPOS_PER_SOURCE = 10000  # 默认最大获取数量
     
     def get_one_post(self, repo_id):
         """

@@ -24,7 +24,30 @@ class GitSource(CodeSource):
             "Authorization": f"token {self.token}",
             "Accept": "application/vnd.github.v3+json"
         }
-        self.MAX_PAPERS_PER_SOURCE = 100  # 默认最大获取数量
+        
+        # 定义基础搜索查询模板
+        self.base_search_queries = [
+            # 计算机科学总类
+            "topic:computer-science",
+            # 人工智能和机器学习
+            "(topic:artificial-intelligence OR topic:ai OR topic:ml OR topic:machine-learning)",
+            # 深度学习和大模型
+            "(topic:deep-learning OR topic:llm OR topic:large-language-model)",
+            # 计算机视觉
+            "(topic:computer-vision OR topic:cv OR topic:image-processing)",
+            # 自然语言处理
+            "(topic:nlp OR topic:natural-language-processing)",
+            # 机器人
+            "(topic:robotics OR topic:robot OR topic:automation)",
+            # 软件工程
+            "(topic:software-engineering OR topic:devops OR topic:ci-cd)",
+            # 分布式系统
+            "(topic:distributed-systems OR topic:cloud OR topic:microservices)",
+            # 量子计算
+            "(topic:quantum-computing OR topic:quantum)",
+            # 数据科学
+            "(topic:data-science OR topic:big-data OR topic:analytics)"
+        ]
     
     def _get_model_class(self):
         """Get the GitHub model class"""
@@ -339,13 +362,13 @@ class GitSource(CodeSource):
         
         return new_count
     
-    def _fetch(self, search_queries, max_repos=None, model=None, batch_size=30):
+    def _fetch(self, search_queries, max_nums=None, model=None, batch_size=30):
         """
         通用仓库获取函数，支持单个或多个搜索查询
         
         Args:
             search_queries: 单个查询或查询列表，每个查询为(query_string, sort, order)元组
-            max_repos: 最大获取仓库数量
+            max_nums: 最大获取仓库数量
             model: 预加载的SentenceTransformer模型
             batch_size: 处理的批次大小
             
@@ -360,8 +383,8 @@ class GitSource(CodeSource):
             model = SentenceTransformer(DEFAULT_MODEL)
             
         # 如果没有指定最大仓库数，使用类默认值
-        if max_repos is None:
-            max_repos = self.MAX_PAPERS_PER_SOURCE
+        if max_nums is None:
+            max_nums = self.MAX_REPOS_PER_SOURCE
             
         # 确保search_queries是可迭代的
         if not hasattr(search_queries, '__iter__') or isinstance(search_queries, tuple):
@@ -382,8 +405,8 @@ class GitSource(CodeSource):
             
             # 分页获取所有结果
             page = 1
-            while total_fetched < max_repos:
-                remaining = max_repos - total_fetched
+            while total_fetched < max_nums:
+                remaining = max_nums - total_fetched
                 
                 try:
                     # 获取当前页的结果
@@ -440,8 +463,8 @@ class GitSource(CodeSource):
                     break
             
             # 如果已经获取足够的仓库，跳出查询循环
-            if total_fetched >= max_repos:
-                self.logger.info(f"已达到最大获取数量 {max_repos}，停止获取")
+            if total_fetched >= max_nums:
+                self.logger.info(f"已达到最大获取数量 {max_nums}，停止获取")   
                 break
                 
         self.logger.info(f"GitHub仓库获取完成。共获取{total_fetched}个仓库，其中新增{total_new}个。")
@@ -497,32 +520,14 @@ class GitSource(CodeSource):
         # 计算一周前的日期
         one_week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
         
-        # 获取最近一周更新的仓库，使用更全面的搜索策略
+        # 构建搜索查询
         search_queries = [
-            # 计算机科学总类
-            (f"topic:computer-science stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 人工智能和机器学习
-            (f"(topic:artificial-intelligence OR topic:ai OR topic:ml OR topic:machine-learning) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 深度学习和大模型
-            (f"(topic:deep-learning OR topic:llm OR topic:large-language-model) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 计算机视觉
-            (f"(topic:computer-vision OR topic:cv OR topic:image-processing) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 自然语言处理
-            (f"(topic:nlp OR topic:natural-language-processing) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 机器人
-            (f"(topic:robotics OR topic:robot OR topic:automation) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 软件工程
-            (f"(topic:software-engineering OR topic:devops OR topic:ci-cd) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 分布式系统
-            (f"(topic:distributed-systems OR topic:cloud OR topic:microservices) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 量子计算
-            (f"(topic:quantum-computing OR topic:quantum) stars:>100 pushed:>{one_week_ago}", "updated", "desc"),
-            # 数据科学
-            (f"(topic:data-science OR topic:big-data OR topic:analytics) stars:>100 pushed:>{one_week_ago}", "updated", "desc")
+            (f"{query} stars:>100 pushed:>{one_week_ago}", "updated", "desc")
+            for query in self.base_search_queries
         ]
         return self._fetch(search_queries, model=model)
     
-    def fetch_all(self, model=None):
+    def fetch_all(self, max_nums=None, model=None):
         """
         Fetch repositories updated in the last month.
         
@@ -536,29 +541,11 @@ class GitSource(CodeSource):
         one_month_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
         today = datetime.now().strftime('%Y-%m-%d')
         
-        # 获取最近一个月更新的仓库，使用更全面的搜索策略
+        # 构建搜索查询
         search_queries = [
-            # 计算机科学总类
-            (f"topic:computer-science stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 人工智能和机器学习
-            (f"(topic:artificial-intelligence OR topic:ai OR topic:ml OR topic:machine-learning) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 深度学习和大模型
-            (f"(topic:deep-learning OR topic:llm OR topic:large-language-model) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 计算机视觉
-            (f"(topic:computer-vision OR topic:cv OR topic:image-processing) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 自然语言处理
-            (f"(topic:nlp OR topic:natural-language-processing) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 机器人
-            (f"(topic:robotics OR topic:robot OR topic:automation) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 软件工程
-            (f"(topic:software-engineering OR topic:devops OR topic:ci-cd) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 分布式系统
-            (f"(topic:distributed-systems OR topic:cloud OR topic:microservices) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 量子计算
-            (f"(topic:quantum-computing OR topic:quantum) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc"),
-            # 数据科学
-            (f"(topic:data-science OR topic:big-data OR topic:analytics) stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc")
+            (f"{query} stars:>100 pushed:{one_month_ago}..{today}", "stars", "desc")
+            for query in self.base_search_queries
         ]
         
         # 指定 fetch_all 获取更多仓库，每个查询获取更多结果
-        return self._fetch(search_queries, model=model, max_repos=600, batch_size=50) 
+        return self._fetch(search_queries, model=model, max_nums=max_nums, batch_size=50)   
