@@ -53,75 +53,6 @@ class GitSource(CodeSource):
         """Get the GitHub model class"""
         return GitHubModel
     
-    def _fetch_repo_from_external_source(self, repo_id):
-        """
-        从GitHub API获取仓库数据
-        
-        Args:
-            repo_id: GitHub仓库ID
-            
-        Returns:
-            GitHubModel: 仓库对象，如果未找到则返回None
-        """
-        # 从GitHub API获取数据
-        try:
-            response = requests.get(
-                f"{self.api_base}/repositories/{repo_id}",
-                headers=self.headers,
-                timeout=10  # 添加超时
-            )
-            response.raise_for_status()
-            repo_data = response.json()
-            
-            # Process the repository data
-            processed_data, embedding = self._process_repo_data(repo_data)
-            
-            # 安全地获取值，防止KeyError
-            stars = repo_data.get('stargazers_count', 0)
-            forks = repo_data.get('forks_count', 0)
-            language = repo_data.get('language') or ''
-            html_url = repo_data.get('html_url', '')
-            clone_url = repo_data.get('clone_url', '')
-            
-            # 解析日期，确保日期字段存在
-            try:
-                updated_at = datetime.strptime(repo_data.get('updated_at', ''), '%Y-%m-%dT%H:%M:%SZ')
-                created_at = datetime.strptime(repo_data.get('created_at', ''), '%Y-%m-%dT%H:%M:%SZ')
-            except (ValueError, TypeError):
-                # 如果日期解析失败，使用当前时间
-                self.logger.warning(f"Failed to parse date for repository {processed_data['full_name']}, using current time")
-                updated_at = datetime.now()
-                created_at = datetime.now()
-            
-            # Create new repository object
-            repo = GitHubModel(
-                repo_id=repo_id,
-                repo_name=processed_data['repo_name'],
-                full_name=processed_data['full_name'],
-                description=processed_data['description'],
-                html_url=html_url,
-                clone_url=clone_url,
-                stars=stars,
-                forks=forks,
-                language=language,
-                topics=processed_data['topics'],
-                readme=processed_data['readme'],
-                updated_at=updated_at,
-                created_at=created_at,
-                embedding=embedding
-            )
-            
-            # 保存到数据库
-            self._save_repo_to_db(repo)
-            
-            return repo
-            
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Network error fetching repository {repo_id}: {str(e)}")
-            return None
-        except Exception as e:
-            self.logger.error(f"Failed to fetch repository {repo_id}: {str(e)}")
-            return None
     
     def _process_repo_data(self, repo_data, embedding_model=None):
         """
@@ -393,6 +324,9 @@ class GitSource(CodeSource):
         total_new = 0
         total_fetched = 0
         
+        # 用于累积新仓库的列表
+        accumulated_repos = []
+        
         # 处理每个查询
         for query_idx, (query_string, sort, order) in enumerate(search_queries):
             self.logger.info(f"执行查询 {query_idx+1}/{len(search_queries)}: {query_string}")
@@ -432,12 +366,15 @@ class GitSource(CodeSource):
                             processed_ids.add(repo_id)
                             new_repos.append(repo)
                     
-                    # 处理结果批次
-                    if new_repos:
+                    # 将新仓库添加到累积列表中
+                    accumulated_repos.extend(new_repos)
+                    
+                    # 当累积的仓库数量达到批处理大小时，进行处理
+                    if len(accumulated_repos) >= batch_size:
                         with get_global_session() as session:
-                            batch_new = self._process_batch(session, new_repos, model)
+                            batch_new = self._process_batch(session, accumulated_repos, model)
                             total_new += batch_new
-                            total_fetched += len(new_repos)
+                            total_fetched += len(accumulated_repos)
                             
                             # 提交更改
                             try:
@@ -446,6 +383,9 @@ class GitSource(CodeSource):
                             except Exception as e:
                                 self.logger.error(f"提交数据库更改时出错: {str(e)}")
                                 session.rollback()
+                        
+                        # 清空累积列表
+                        accumulated_repos = []
                     
                     # 如果这一页的结果少于每页数量，说明没有更多结果了
                     if len(repos) < per_page:
@@ -466,6 +406,21 @@ class GitSource(CodeSource):
             if total_fetched >= max_nums:
                 self.logger.info(f"已达到最大获取数量 {max_nums}，停止获取")   
                 break
+        
+        # 处理剩余的仓库
+        if accumulated_repos:
+            with get_global_session() as session:
+                batch_new = self._process_batch(session, accumulated_repos, model)
+                total_new += batch_new
+                total_fetched += len(accumulated_repos)
+                
+                # 提交更改
+                try:
+                    session.commit()
+                    self.logger.info(f"成功保存最后一批 {batch_new} 个新仓库，当前总计: {total_new}")
+                except Exception as e:
+                    self.logger.error(f"提交数据库更改时出错: {str(e)}")
+                    session.rollback()
                 
         self.logger.info(f"GitHub仓库获取完成。共获取{total_fetched}个仓库，其中新增{total_new}个。")
         return total_new
