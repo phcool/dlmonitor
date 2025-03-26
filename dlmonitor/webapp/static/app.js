@@ -4,6 +4,16 @@ Javascript for Deep Community.
 
 INIT_KEYWORDS = "arxiv:large language model,nature:machine learning,github:llm";
 
+// 常量定义      
+DEFAULT_KEYWORDS = "arxiv:large language model,nature:machine learning,github:llm";
+
+DATE_TOKEN_MAP = {
+    'today': 0,  // 仅今天
+    '2-days': 2,  // 最近两天
+    '1-week': 7,
+    '1-month': 31
+}
+
 dlmonitor = {
     ajaxCount: 0,
     previewTimeout: null,
@@ -474,10 +484,11 @@ dlmonitor.fetch = function(src_name, keyword, index, start, sortType) {
 // 日期相关函数
 dlmonitor.convertDateInfo = function(token) {
     switch (token) {
-        case '1-week': return "Recent one week";
-        case '2-week': return "Recent two weeks";
-        case '1-month': return "Recent one month";
-        default: return "Recent two weeks";
+        case 'today': return "Today";
+        case '2-days': return "Last 2 days";
+        case '1-week': return "Last week";
+        case '1-month': return "Last month";
+        default: return "Last week";
     }
 };
 

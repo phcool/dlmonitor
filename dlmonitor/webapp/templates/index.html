@@ -81,14 +81,15 @@
       </div>
       
       <div class="date-filter-wrapper">
-        <div class="date-select-container">
-          <button class="dropdown-btn" id="date-dropdown-btn">
-            <i class="far fa-calendar-alt"></i> <span id="date-info">Recent two weeks</span> <i class="fas fa-caret-down"></i>
+        <div class="date-select-container" style="min-width: 120px;">
+          <button class="dropdown-btn" id="date-dropdown-btn" style="white-space: nowrap; width: 100%; text-align: left;">
+            <i class="far fa-calendar-alt"></i> <span id="date-info">Last week</span> <i class="fas fa-caret-down"></i>
           </button>
           <div class="dropdown-content hidden" id="date-dropdown">
-            <a href="#" data-datetoken="1-week"><i class="fas fa-calendar-week"></i> Recent one week</a>
-            <a href="#" data-datetoken="2-week"><i class="fas fa-calendar-alt"></i> Recent two weeks</a>
-            <a href="#" data-datetoken="1-month"><i class="fas fa-calendar"></i> Recent one month</a>
+            <a href="#" data-datetoken="today"><i class="fas fa-calendar-day"></i> Today</a>
+            <a href="#" data-datetoken="2-days"><i class="fas fa-calendar-day"></i> Last 2 days</a>
+            <a href="#" data-datetoken="1-week"><i class="fas fa-calendar-week"></i> Last week</a>
+            <a href="#" data-datetoken="1-month"><i class="fas fa-calendar"></i> Last month</a>
           </div>
         </div>
       </div>

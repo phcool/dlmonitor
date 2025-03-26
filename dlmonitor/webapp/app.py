@@ -38,8 +38,9 @@ app.config['SESSION_TYPE'] = 'filesystem'
 # 常量定义      
 DEFAULT_KEYWORDS = "arxiv:large language model,nature:machine learning,github:deep learning"
 DATE_TOKEN_MAP = {
+    'today': 0,  # 仅今天
+    '2-days': 2,  # 最近两天
     '1-week': 7,
-    '2-week': 14,
     '1-month': 31
 }
 VALID_SOURCES = ["arxiv", "nature", "github"]
@@ -47,14 +48,18 @@ VALID_SOURCES = ["arxiv", "nature", "github"]
 def get_date_str(token):
     """将时间标记转换为日期字符串，例如'1-week' -> '2023-01-01'"""
     if token not in DATE_TOKEN_MAP:
-        logger.warning(f"无效的日期token: {token}，使用默认值 '2-week'")
-        token = '2-week'
+        logger.warning(f"无效的日期token: {token}，使用默认值 '1-week'")
+        token = '1-week'
     
     days = DATE_TOKEN_MAP[token]
-    target_date = DT.date.today() - DT.timedelta(days=days)
-    result = target_date.strftime("%Y-%m-%d")
-    logger.info(f"时间筛选: {token} 转换为 {result} (过去 {days} 天)")
-    return result
+    if days == 0:  # today
+        target_date = DT.date.today()
+        logger.info(f"时间筛选: {token} -> {target_date.strftime('%Y-%m-%d')} (仅今天)")
+    else:
+        target_date = DT.date.today() - DT.timedelta(days=days)
+        logger.info(f"时间筛选: {token} -> {target_date.strftime('%Y-%m-%d')} (过去 {days} 天)")
+    
+    return target_date.strftime("%Y-%m-%d")
 
 @app.route('/')
 def index():
